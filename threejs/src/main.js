@@ -8,7 +8,7 @@ import { sendTourEvent } from './api.js';
 import {TERRACE,OFFICE_ORIGIN} from './layout.js';
 
 const $ = id => document.getElementById(id);
-const next=$('next'),back=$('back'),restart=$('restart'),dots=$('step-dots');
+const next=$('next'),back=$('back'),restart=$('restart');
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 let renderer;
 try {
@@ -25,6 +25,7 @@ function start(){
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.28;
   const scene=new THREE.Scene();
+  scene.background=new THREE.Color(0xe5ece5);
   const camera=new THREE.OrthographicCamera(-20,20,15,-15,.1,220);
   const controls=new OrbitControls(camera,renderer.domElement);
   controls.enableDamping=true;controls.enablePan=false;controls.enableZoom=false;
@@ -36,13 +37,12 @@ function start(){
   sun.target.position.set(0,7,-3);scene.add(sun,sun.target);
   const fill=new THREE.DirectionalLight(0xdeeee5,1.3);fill.position.set(20,25,-18);scene.add(fill);
   const world=createWorld();scene.add(world.group);
-  document.querySelector('.intro-copy').insertAdjacentElement('afterend',$('notification-panel'));
   // One fixed ground plane keeps shadows spatially consistent during travel.
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(250,250),new THREE.ShadowMaterial({color:0x646d54,opacity:.11}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
   let current=0,busy=true,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
-  let controller,toastTimer,denied=false,freeOrbit=false,playhead=0;
+  let controller,toastTimer,denied=false,freeOrbit=false,playhead=0,decisionAnimation=null;
   let playback={start:performance.now(),duration:reducedMotion.matches?0:stops[0].duration,from:0,to:boundaries[1],camera:null};
   let state=sampleJourney(0,0),canonical=journeyFrame(0,0,aspect);
   controls.addEventListener('start',()=>{if(!busy)freeOrbit=true;});
@@ -60,22 +60,16 @@ function start(){
     const cursor=atTime(playhead);canonical=journeyFrame(cursor.index,cursor.progress,aspect);
     if(freeOrbit&&!busy)fitCurrentPose();else applyFrame(canonical);
   }
-  stops.forEach((stop,index)=>{
-    const dot=document.createElement('button');dot.type='button';dot.className='step-dot';
-    dot.setAttribute('aria-label',`Stop ${index+1}: ${stop.title}`);dot.addEventListener('click',()=>goTo(index));dots.append(dot);
-  });
   function updateUI(){
     const stop=stops[current];
     $('app').dataset.scene=String(current);
-    $('step-number').textContent=String(current+1).padStart(2,'0');$('step-category').textContent=stop.category;
-    $('step-title').textContent=stop.title;$('step-description').textContent=stop.description;$('next-label').textContent=stop.nextLabel;
-    $('view-caption').textContent=stop.caption;$('hero-line').textContent=stop.hero[0];$('hero-emphasis').textContent=stop.hero[1];
-    $('intro-note').textContent=stop.note;$('journey-position').textContent=['STREET ENTRANCE','ROOFTOP OFFICE','STREET ENTRANCE','COURTYARD','GLASS ELEVATOR','ROOFTOP TERRACE'][current];
-    next.disabled=busy;back.disabled=busy||current===0;restart.disabled=busy;$('allow').disabled=$('deny').disabled=busy;
-    dots.querySelectorAll('button').forEach((dot,i)=>{dot.disabled=busy;if(i===current)dot.setAttribute('aria-current','step');else dot.removeAttribute('aria-current');});
+    $('step-number').textContent=String(current+1).padStart(2,'0');
+    $('step-title').textContent=stop.title;
+    $('next-label').textContent=current===1?'Choose on phone':current===5?'Replay':'Next';
+    next.disabled=busy||current===1;back.disabled=busy||current===0;restart.disabled=busy;
+    $('allow').disabled=$('deny').disabled=busy;
     $('viewport').setAttribute('aria-busy',String(busy));
-    $('animation-status').textContent=busy?'FOLLOWING THE JOURNEY':'DRAG TO LOOK AROUND';
-    $('decision-message').textContent=denied?'Door stays closed. The courier is waiting downstairs.':'Pizza delivery is at the street door.';
+    $('decision-message').textContent=denied?'Door closed. The courier is waiting.':'Pizza delivery';
     $('notification-panel').classList.toggle('declined',denied);
   }
   function report(stop,event='tour_step_entered'){
@@ -103,14 +97,32 @@ function start(){
     report(stops[index],decision?'access_request_approved':'tour_step_entered');
   }
 
-  next.addEventListener('click',()=>goTo((current+1)%stops.length,{decision:current===1}));
+  function chooseOnPhone(choice){
+    if(busy||current!==1)return;
+    freeOrbit=false;controls.enabled=false;busy=true;
+    decisionAnimation={choice,start:performance.now()};updateUI();
+  }
+  next.addEventListener('click',()=>goTo((current+1)%stops.length));
   back.addEventListener('click',()=>goTo(Math.max(0,current-1)));
   restart.addEventListener('click',()=>goTo(0,{replay:true}));
-  $('allow').addEventListener('click',()=>goTo(2,{decision:true}));
-  $('deny').addEventListener('click',()=>{if(busy||current!==1)return;denied=true;updateUI();report(stops[current],'access_request_denied');});
+  $('allow').addEventListener('click',()=>chooseOnPhone('yes'));
+  $('deny').addEventListener('click',()=>chooseOnPhone('no'));
+  let pointerStart=null;
+  function phoneHit(event){
+    const rect=renderer.domElement.getBoundingClientRect();
+    return world.pickPhoneChoice(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);
+  }
+  renderer.domElement.addEventListener('pointerdown',event=>{pointerStart=[event.clientX,event.clientY];});
+  renderer.domElement.addEventListener('pointerup',event=>{
+    if(current!==1||busy||!pointerStart||Math.hypot(event.clientX-pointerStart[0],event.clientY-pointerStart[1])>6)return;
+    const choice=phoneHit(event);if(choice)chooseOnPhone(choice);
+  });
+  renderer.domElement.addEventListener('pointermove',event=>{
+    renderer.domElement.style.cursor=current===1&&!busy&&phoneHit(event)?'pointer':'grab';
+  });
   document.addEventListener('keydown',event=>{
     if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT|BUTTON|A/.test(event.target.tagName)||event.target.isContentEditable)return;
-    if(event.key==='ArrowRight'){event.preventDefault();next.click();}if(event.key==='ArrowLeft'){event.preventDefault();back.click();}
+    if(event.key==='ArrowRight'||event.code==='Space'){event.preventDefault();next.click();}if(event.key==='ArrowLeft'){event.preventDefault();back.click();}
   });
   const observer=new ResizeObserver(resize);observer.observe($('viewport'));resize();updateUI();controls.enabled=false;
 
@@ -144,8 +156,18 @@ function start(){
       playhead=playback.from+(playback.to-playback.from)*t;
       if(t===1){playback=null;busy=false;controls.enabled=true;updateUI();}
     }
+    if(decisionAnimation&&now-decisionAnimation.start>=1100){
+      const choice=decisionAnimation.choice;decisionAnimation=null;busy=false;controls.enabled=true;
+      if(choice==='yes')goTo(2,{decision:true});
+      else{denied=true;updateUI();report(stops[current],'access_request_denied');}
+    }
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor()};
+    if(denied&&current===1)state.phoneChoice='no';
+    if(decisionAnimation){
+      const p=Math.min(1,(now-decisionAnimation.start)/1100);
+      state.phoneTap=phase(p,0,.40)*(1-phase(p,.70,1));state.phoneChoice=decisionAnimation.choice;
+    }
     canonical=journeyFrame(cursor.index,cursor.progress,aspect);
     if(busy||review){
       const blend=playback?.camera?phase(now-playback.start,0,Math.min(900,playback.duration)):1;

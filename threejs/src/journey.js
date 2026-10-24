@@ -29,23 +29,31 @@ export function route(points, p) {
 export function sampleJourney(index, progress) {
   const p = clamp(progress);
   const s = {
-    visitor: [...STREET], visitorYaw: Math.PI, walking: false, ring: 0,
+    visitor: [...STREET], visitorYaw: Math.PI, walking: false, ring: 0, intercomReach:0, intercomPress:0, liftReach:0, liftPress:0, liftCalled:0,
     stage:index, focus:['street','office','street','courtyard','lift','terrace'][index],
     egor: [...DESK], egorYaw: .2+ROOM_ROTATION, phone: 0, notification: 0, approved: 0,
     streetDoor: 0, liftY: TOP, liftDoor: 0, officeDoor: 0, greet: 0, facade: 1, leftWing:1,
   };
-  if (index === 0) s.ring = phase(p, .15, .5);
+  if (index === 0) {
+    s.intercomReach=phase(p,.18,.42)*(1-phase(p,.66,.9));
+    s.intercomPress=phase(p,.42,.48)*(1-phase(p,.58,.66));
+    s.ring=phase(p,.46,.5);
+  }
   if (index >= 1) s.ring = index === 1 ? 1 - phase(p, 0, .15) : 0;
-  if (index === 1) { s.phone = phase(p, .60, .82); s.notification = phase(p, .72, .95); s.facade=1-.94*phase(p,.08,.4); }
+  if (index === 1) { s.phone = phase(p, .50, .74); s.notification = phase(p, .68, .86); s.facade=1-.94*phase(p,.08,.4); }
   if (index === 2) { s.approved = 1; s.phone=1-phase(p,0,.18); s.notification=1-phase(p,0,.18); s.streetDoor = phase(p, .65, .96); s.facade=.06+.94*phase(p,.5,.82); }
+  if (index >= 4) s.liftCalled=1;
   if (index >= 3) { s.approved = 1; s.streetDoor = 1; s.facade = index === 3 ? 1 - .94*phase(p, .04, .27) : .06; }
   if (index === 3) {
     const walk = walkingRoute([STREET, [0, 0, 12.3], [0, 0, 8], [0, 0, LIFT_POSITION[2]], WAITING], phase(p, .1, .64));
     s.visitor = walk.position; s.visitorYaw = turn(Math.PI, walk.yaw, phase(p,0,.1));
     if(p>.60)s.visitorYaw=turn(s.visitorYaw,-Math.PI/2,phase(p,.60,.68));
     s.walking = p > .1 && p < .64;
-    s.liftY = TOP * (1 - phase(p, .64, .9));
-    s.liftDoor = phase(p, .9, 1);
+    s.liftReach=phase(p,.65,.69)*(1-phase(p,.74,.82));
+    s.liftPress=phase(p,.69,.71)*(1-phase(p,.73,.75));
+    s.liftCalled=phase(p,.70,.72);
+    s.liftY = TOP * (1 - phase(p, .72, .96));
+    s.liftDoor = phase(p, .96, 1);
   }
   if (index === 4) {
     const enter = walkingRoute([WAITING, CABIN], phase(p, .03, .2));
@@ -77,7 +85,7 @@ export const stops = [
     title: 'Good things come in pizza boxes.',
     description: 'Our courier rings the intercom at the street entrance. Someone upstairs gets the message.',
     hero: ['Pizza’s here.', 'Almost.'], note: 'A little delivery, from the street to our rooftop.',
-    duration: 2200,
+    duration: 3800,
     nextLabel: 'Next',
   },
   {

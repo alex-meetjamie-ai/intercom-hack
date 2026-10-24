@@ -1,6 +1,6 @@
 # Office Hours — Linienstraße 144
 
-A six-scene Three.js story about a pizza delivery to our Berlin rooftop office. The original cream, coral and sage visual style is preserved. Geometry is generated locally, using the supplied street and office photos as references. The photos themselves are not bundled or uploaded.
+A six-scene Three.js story about a pizza delivery to our Berlin rooftop office. The sunny cream, coral and sage world fills the screen, with minimal dark controls. Geometry is generated locally, using the supplied street and office photos as references. The photos themselves are not bundled or uploaded.
 
 ## Run
 
@@ -12,10 +12,9 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use Next to advance. The camera and characters move together along one continuous timeline. Each button press plays the next part of the journey; the courtyard walk and lift ride each take eleven seconds. Drag to orbit once the animation finishes. Back retraces the current action. Scene dots and Restart travel through the same timeline at a faster pace when crossing several stops. Left/right arrow keys navigate when focus is outside a button. Reduced-motion preferences skip the animated movement and show each scene's final state.
+Open the local URL printed by Vite. Use Next to advance. The camera and characters move together along one continuous timeline. Each button press plays the next part of the journey; the courtyard walk and lift ride each take eleven seconds. Drag to orbit once the animation finishes. Back retraces the current action. Restart travel through the same timeline at a faster pace when crossing several stops. Left/right arrow keys navigate when focus is outside a button. Reduced-motion preferences skip the animated movement and show each scene's final state.
 
 ```sh
-npm test
 npm run build
 npm run preview
 ```
@@ -23,7 +22,7 @@ npm run preview
 ## The six scenes
 
 1. The courier rings the intercom at the arched street entrance.
-2. The camera travels to the loft; Egor receives a simulated push notification. **Not now** keeps the entrance closed. **Let them in** advances the story.
+2. The camera travels to the loft; Egor receives a simulated push notification. **No** on his phone keeps the entrance closed. **Yes** advances the story after a tap animation.
 3. The camera returns to the street and the entrance doors open.
 4. The courier walks through the courtyard, turns left along the rear wall, and approaches the corner elevator from its right-hand side.
 5. The courier boards; doors close before the glass elevator rises. The camera follows the cabin upward, then widens to reveal the rooftop landing.
@@ -40,8 +39,7 @@ The surrounding floors and dimensions are intentionally schematic. `TOP` is a dr
 - `src/geometry.js`: shared materials, geometric helpers, plants, labels and cutaway fading.
 - `src/characters.js`: courier, pizza boxes, Egor, phones and walking/waving poses.
 - `src/main.js`: rendering, navigation, notification decision controls and optional backend events.
-- `src/style.css`: the surrounding interface; Google Fonts have local fallbacks.
-- `src/*.test.js`: checks continuity across stop boundaries in both directions, walking clearances, boarding, camera tracking, actual courier mesh projection and persistent building geometry.
+- `src/style.css`: the minimal dark overlay controls around the full-screen daylight scene.
 
 ## Camera and model presentation
 
@@ -61,8 +59,12 @@ To connect your backend, copy `.env.example` to `.env.local`, set `VITE_TOUR_EVE
 { "event": "tour_step_entered", "step": "courtyard" }
 ```
 
-The step IDs are `doorbell`, `notification`, `access-granted`, `courtyard`, `elevator-ride` and `rooftop-greeting`. Egor's approval sends `access_request_approved` with step `access-granted`; declining sends `access_request_denied` with step `notification`. Navigating directly with a scene dot is a preview operation and sends the normal scene event.
+The step IDs are `doorbell`, `notification`, `access-granted`, `courtyard`, `elevator-ride` and `rooftop-greeting`. Egor's approval sends `access_request_approved` with step `access-granted`; declining sends `access_request_denied` with step `notification`.
 
 Any successful HTTP status is accepted; no response body is required. For a separately hosted backend, allow the frontend origin through CORS. Requests time out after five seconds; navigation cancels older pending requests. Failures show a message and allow the demo to continue. Initial page load sends no event. Vite environment values are public browser configuration. Adapt `src/api.js` to the real contract when available.
 
 The rear passage is structural geometry: side piers and an overhead brick section leave the aperture open through the block. Its floor continues to a small rear landing. The obsolete decorative doorway beside the lift has been removed.
+
+## Immersive presentation
+
+The 3D canvas fills the screen. A small dark transport control provides Back, Next and replay; Space or the arrow keys also advance. Yes/No are clickable on Egor’s physical phone screen; keyboard users can Tab to equivalent controls. Choosing an answer animates his fingertip tapping it before the story continues. Architectural signs remain, while floating character labels and landing-page copy are hidden. Daylight lighting stays warm and bright. The camera closes in for the intercom press, travels to Egor and his phone, then focuses on the call pedestal and the right-hand elevator entrance. The courier makes physical fingertip contact with both buttons; the lift starts descending after the call. The camera opens out during ascent.

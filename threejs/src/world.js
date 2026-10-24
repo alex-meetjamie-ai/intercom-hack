@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { group, box, ball, cylinder, beam, label, plant, tree, material } from './geometry.js';
 import { createPerson } from './characters.js';
 import { TOP } from './journey.js';
-import {OFFICE_ROTATION,OFFICE_ORIGIN,TERRACE,COURIER_LANDING,OFFICE_DOOR_LOCAL,LIFT_POSITION,LIFT_OPENING,REAR_BUILDING,REAR_PASSAGE,ROOF_ROTATION,ROOM_ROTATION,roomPoint} from './layout.js';
+import {OFFICE_ROTATION,OFFICE_ORIGIN,TERRACE,COURIER_LANDING,OFFICE_DOOR_LOCAL,LIFT_POSITION,LIFT_OPENING,REAR_BUILDING,REAR_PASSAGE,ROOF_ROTATION,ROOM_ROTATION,roomPoint,INTERCOM_BUTTON,LIFT_CALL_BUTTON} from './layout.js';
 
 // Every mesh belongs to one presentation layer. Optional inner groups multiply
 // that layer's alpha, while retaining translucent glass and label settings.
@@ -134,7 +134,7 @@ function buildStreet(parent) {
   box(plaque, [.36, .7, .14], [0, 0, 0], 'steel');
   const bellMaterial = material('#bdc4b4').clone();
   for (let y = -.2; y <= .2; y += .1) box(plaque, [.22, .025, .012], [0, y, .085], 'ivory', 0);
-  const bell = ball(plaque, .052, [0, -.26, .12], bellMaterial);
+  const bell = ball(plaque, .052, [0, -.26, .12], bellMaterial);bell.name='Intercom button';
   label(street, 'LINIENSTRASSE', 3, .35, [-7.5, .04, 16.3]).rotation.x = -Math.PI / 2;
   bicycle(street, [-5, .05, 12.4], .15); bicycle(street, [6.8, .05, 12.4], -.1);
   return { group: street, facade, leaves, bell, plaque };
@@ -309,7 +309,12 @@ function buildLift(parent) {
     box(portalGroup,[2.75,.13,.2],[0,3.08,1.325],'steel');
     label(portalGroup,'↑',.5,.25,[0,3.45,1.3],{color:'#f9edce',background:'#304b4d'});
   }
-  return {group:shaft,lowerShaft,crown,cabin,doors};
+  // A reachable call pedestal beside the right-hand entrance.
+  const call=group(lowerShaft,'Lift call pedestal',[LIFT_CALL_BUTTON[0]-LIFT_POSITION[0]-.15875,0,LIFT_CALL_BUTTON[2]-LIFT_POSITION[2]]);
+  box(call,[.13,1.1,.15],[0,.55,0],'steel',.02);
+  box(call,[.22,.44,.30],[0,1.25,0],'charcoal',.035);
+  const callButton=ball(call,.065,[.12,1.25,0],material('#b7c6b8'),[.35,1,1]);callButton.name='Elevator call button';
+  return {group:shaft,lowerShaft,crown,cabin,doors,callButton};
 }
 
 function chair(parent, position, rotation = 0, color = 'charcoal') {
@@ -479,7 +484,11 @@ export function createWorld() {
     ringMaterial.opacity=.8*p.street*(s.facade??1);
     ringGroup.visible=s.ring>.1&&ringMaterial.opacity>.003;
     rings.forEach((ring,i)=>{const t=(time*.8+i/3)%1;ring.scale.setScalar(.65+t*.8);});
-    street.bell.material.color.set(s.approved ? '#8db496':'#c3c5b7');
+    street.bell.material.color.set(s.approved||s.intercomPress>.4 ? '#8db496':'#c3c5b7');
+    street.bell.position.z=.12-.018*(s.intercomPress||0);
+    lift.callButton.position.x=.12-.018*(s.liftPress||0);
+    lift.callButton.material.color.set(s.liftCalled>.5?'#eac275':'#b7c6b8');
+    lift.callButton.material.emissive.set(s.liftCalled>.5?'#6d4b1c':'#000000');
     lift.cabin.position.y=s.liftY;
     lift.doors.forEach(door=>{
       const {side,closed,open,portal}=door.userData;
@@ -487,17 +496,22 @@ export function createWorld() {
       door.position.x=side*THREE.MathUtils.lerp(closed,open,atLanding?s.liftDoor:0);
     });
     office.door.rotation.y=s.officeDoor*1.15;
-    const focus=s.focus || (s.phone>.3?'office':s.greet>.1?'terrace':'street');
-    courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,ring:s.ring>.1,showLabel:focus==='street'||focus==='courtyard',time});
-    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.3,waving:s.greet>.5,showLabel:focus==='office',time});
+    courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,reachTarget:s.stage===0?INTERCOM_BUTTON:LIFT_CALL_BUTTON,reachNormal:s.stage===0?[0,0,1]:[1,0,0],reachAmount:s.stage===0?s.intercomReach:s.liftReach,showLabel:false,time});
+    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,waving:s.greet>.5,showLabel:false,time});
     colleague.update({position:roomPoint([2.6,0,3.4]),yaw:-.9+ROOM_ROTATION,waving:s.greet>.3,showLabel:false,time});
     const upstairs=s.visitor[1]>=TOP-.5;
     const courierOpacity=Math.max(p.street,p.courtyard,p.shaft*(upstairs?1:p.lowerShaft),upstairs?p.terrace:0);
     const officeOpacity=Math.max(p.loft,p.terrace);
     fades.courier(courierOpacity,s); fades.egor(officeOpacity,s);
     fades.colleague(officeOpacity,s);
-    fades.hello(Math.max(0,(s.greet-.65)/.35)*officeOpacity,s);
+    fades.hello(0,s);
     updateView(camera);
   }
-  return {group:root,layers,update,updateView,getState:()=>state};
+  const phoneRay=new THREE.Raycaster();
+  function pickPhoneChoice(pointer,camera){
+    if(!egor.phone.visible)return null;
+    phoneRay.setFromCamera(pointer,camera);
+    return phoneRay.intersectObjects(egor.phoneButtons,false)[0]?.object.userData.phoneChoice||null;
+  }
+  return {group:root,layers,update,updateView,pickPhoneChoice,getState:()=>state};
 }

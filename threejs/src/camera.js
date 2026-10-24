@@ -1,5 +1,5 @@
 import { sampleJourney, phase, TOP, CABIN } from './journey.js';
-import {OFFICE_ORIGIN} from './layout.js';
+import {OFFICE_ORIGIN,phonePoint,LIFT_CALL_BUTTON} from './layout.js';
 
 const DISTANCE=80;
 const direction=[.62,.43,1];
@@ -43,10 +43,20 @@ export function blendFrames(a,b,t){
   return {target,position:add(target,scale(facing,DISTANCE)),size:mix(a.size,b.size,t),bounds:b.bounds};
 }
 function entrance(aspect){return shot([0,5.6,11.2],26,aspect,streetBounds);}
+function intercom(aspect){return shot([2.05,1.5,11.1],4.4,aspect,around([1.7,1.85,11.15],3),[-.6,.25,1]);}
+function liftClose(state,aspect){const target=add(state.visitor,[0,2.8,-1.3]);return shot(target,8,aspect,around(target,4.5),[1,.38,1]);}
+function liftButton(aspect){return shot([-6.7,1.7,-6.25],5.6,aspect,around(LIFT_CALL_BUTTON,3),[1,.48,1]);}
+function phoneClose(state,aspect){
+  const target=phonePoint(state.egor,state.egorYaw,[0,0,.04]);
+  target[1]+=.25;
+  const yaw=state.egorYaw,local=[1.05,1.3,-1.15];
+  const facing=[local[0]*Math.cos(yaw)+local[2]*Math.sin(yaw),local[1],-local[0]*Math.sin(yaw)+local[2]*Math.cos(yaw)];
+  return shot(target,2.15,aspect,around(target,2),facing);
+}
 function rooftop(aspect){return fitFrame({...shot([OFFICE_ORIGIN[0]-1.4,TOP+2.3,-12],25,aspect,officeBounds,[-.55,.6,1]),minSize:25},officeBounds,aspect);}
 function overhead(aspect){return fitFrame({...shot([0,11.5,-3],43,aspect,WORLD_BOUNDS,[-.15,.85,1]),minSize:43},WORLD_BOUNDS,aspect);}
 function officeFlight(p,aspect){
-  const start=entrance(aspect),above=overhead(aspect),end=rooftop(aspect);
+  const start=intercom(aspect),above=overhead(aspect),end=rooftop(aspect);
   if(p<.45)return blendFrames(start,above,phase(p,0,.45));
   return blendFrames(above,end,phase(p,.45,1));
 }
@@ -54,19 +64,24 @@ function officeFlight(p,aspect){
 // rather than finishing a separate scene transition before he starts moving.
 export function journeyFrame(index,progress,aspect=1.5){
   const p=Math.max(0,Math.min(1,progress)),state=sampleJourney(index,p);
-  if(index===0)return entrance(aspect);
-  if(index===1)return officeFlight(phase(p,0,.64),aspect);
-  if(index===2)return officeFlight(1-phase(p,.08,.72),aspect);
+  if(index===0)return blendFrames(entrance(aspect),intercom(aspect),phase(p,0,.32));
+  if(index===1)return blendFrames(officeFlight(phase(p,0,.60),aspect),phoneClose(state,aspect),phase(p,.50,.98));
+  if(index===2){
+    if(p<.4)return blendFrames(phoneClose(state,aspect),rooftop(aspect),phase(p,0,.4));
+    return officeFlight(1-phase(p,.4,1),aspect);
+  }
   if(index===3){
     const followTarget=add(state.visitor,[0,2.8,-1.3]);
     const follow=shot(followTarget,15,aspect,around(followTarget,4.5));
-    return blendFrames(entrance(aspect),follow,phase(p,0,.28));
+    const tracking=blendFrames(intercom(aspect),follow,phase(p,0,.28));
+    const arrival=blendFrames(tracking,liftClose(state,aspect),phase(p,.62,.86));
+    return blendFrames(arrival,liftButton(aspect),phase(p,.60,.69)*(1-phase(p,.83,.97)));
   }
   if(index===4){
     // Ease from the waiting position into the car, then match its vertical
     // displacement exactly. Open out to the terrace as it reaches the top.
     const target=add(state.visitor,[0,2.8,-1.3]);
-    const follow=shot(target,15,aspect,around(target,4.5));
+    const follow=shot(target,8+3*phase(p,.2,.34),aspect,around(target,4.5),[1,.38,1]);
     const end=rooftop(aspect);
     const frame=blendFrames(follow,end,phase(p,.73,.98));
     const facing=blendFrames(follow,end,phase(p,.28,.98));

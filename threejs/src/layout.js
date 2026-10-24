@@ -27,3 +27,16 @@ export const REAR_BUILDING={left:-17.5,right:11,back:-20.55,front:-8.15};
 
 // Rear passage shown to the right of the elevator in the courtyard photo.
 export const REAR_PASSAGE={centerX:-2.2,width:3.5,height:4.4};
+
+// Shared physical contact points keep animation, controls and cameras aligned.
+export const INTERCOM_BUTTON=[2.04,1.22,10.988];
+export const LIFT_CALL_BUTTON=[-6.85,1.25,-5.85];
+export const PHONE_POSE={position:[.26,1.42,.60],rotationX:-1.9,rotationZ:Math.PI};
+export const PHONE_CHOICES={yes:[.076,-.205,.029],no:[-.076,-.205,.029]};
+export function phonePoint(position,yaw,point=[0,0,0]){
+  const [px,py,z]=point,c=Math.cos(PHONE_POSE.rotationX),s=Math.sin(PHONE_POSE.rotationX);
+  const cz=Math.cos(PHONE_POSE.rotationZ),sz=Math.sin(PHONE_POSE.rotationZ);
+  const x=px*cz-py*sz,y=px*sz+py*cz;
+  const local=[PHONE_POSE.position[0]+x,PHONE_POSE.position[1]+y*c-z*s,PHONE_POSE.position[2]+y*s+z*c];
+  return [position[0]+local[0]*Math.cos(yaw)+local[2]*Math.sin(yaw),position[1]+local[1],position[2]-local[0]*Math.sin(yaw)+local[2]*Math.cos(yaw)];
+}
