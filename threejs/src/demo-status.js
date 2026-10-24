@@ -1,8 +1,16 @@
+import {stops} from './journey.js';
+
 export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
   const panel=document.createElement('aside');panel.className='demo-status';
-  panel.innerHTML='<div class="admin-kicker">JAMIE · LIVE ADMIN</div><div class="demo-body"><div class="admin-state"><div><span>Door</span><strong data-door>Closed</strong></div><div><span>Elevator</span><strong data-lift>Floor 5</strong></div></div><section class="admin-activity"><span class="admin-label">LATEST ACTION</span><p data-action>Waiting for a call</p></section><section class="admin-conversation" hidden><span class="admin-label" data-speaker></span><p data-words></p></section><section class="admin-approval" hidden><span class="admin-label">ENTRY REQUEST</span><p data-visitor></p><div class="admin-decisions"><button type="button" data-decision="no">No</button><button type="button" data-decision="yes">Yes, let them in</button></div></section><button type="button" class="demo-stop" aria-label="Stop demo and call"><span aria-hidden="true">■</span> Stop</button></div>';
+  panel.innerHTML='<div class="admin-kicker">JAMIE · LIVE ADMIN</div><div class="demo-body"><div class="admin-state"><div><span>Door</span><strong data-door>Closed</strong></div><div><span>Elevator</span><strong data-lift>Floor 5</strong></div></div><section class="admin-activity"><span class="admin-label">LATEST ACTION</span><p data-action>Waiting for a call</p></section><section class="admin-conversation" hidden><span class="admin-label" data-speaker></span><p data-words></p></section><button type="button" class="demo-stop" aria-label="Stop demo and call"><span aria-hidden="true" data-control-icon>■</span><span data-control-label>Stop</span></button></div>';
   panel.setAttribute('aria-label','Presentation status');document.getElementById('app').append(panel);
-  let index=0,connection='idle',running=false,approval=null,transitioning=false;
+  const stack=document.createElement('div');stack.className='presentation-sidebar';
+  panel.replaceWith(stack);stack.append(panel);
+  const phone=document.createElement('section');phone.className='presentation-phone';phone.hidden=true;
+  phone.setAttribute('aria-label',"Egor's phone");
+  phone.innerHTML='<div class="phone-speaker" aria-hidden="true"></div><div class="phone-owner">EGOR’S PHONE</div><div class="phone-notification"><span class="phone-app">JAMIE · INTERCOM</span><h2 data-visitor>Visitor at the door</h2><p data-visit-detail>Entry request</p><span data-approval-state hidden></span></div><div class="admin-decisions"><button type="button" data-decision="no">No</button><button type="button" data-decision="yes">Yes</button></div><div class="phone-home" aria-hidden="true"></div>';
+  stack.append(phone);
+  let index=0,connection='idle',running=false,approval=null,lastRequest=null,transitioning=false,phoneScene=false;
   const stop=panel.querySelector('.demo-stop');
   stop.classList.add('emergency-stop');
   const links=document.createElement('nav');links.className='demo-shortcuts';links.setAttribute('aria-label','Demo controls and pages');
@@ -15,21 +23,42 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
   }
   document.getElementById('app').append(links);
   stop.addEventListener('click',onStop);
-  const decisions=[...panel.querySelectorAll('[data-decision]')];
+  const decisions=[...phone.querySelectorAll('[data-decision]')];
   decisions.forEach(button=>button.addEventListener('click',()=>onDecision(button.dataset.decision)));
   function updateApproval(request){
     approval=request?.status==='pending'?request:null;
-    panel.querySelector('.admin-approval').hidden=!approval;
-    panel.querySelector('[data-visitor]').textContent=approval?`${approval.name || 'Visitor'} is at the door`:'';
+    if(request)lastRequest=request;
+    else if(index===0)lastRequest=null;
+    phone.querySelector('[data-visitor]').textContent=lastRequest?.name?`${lastRequest.name} is at the door`:'Visitor at the door';
+    const detail=lastRequest?.matched_records?.[0]?.title||'';
+    phone.querySelector('[data-visit-detail]').textContent=detail;
+    phone.querySelector('[data-visit-detail]').hidden=!detail;
+    phone.querySelector('[data-approval-state]').textContent=({pending:'Waiting for your approval',allowed:'Entry approved',denied:'Entry denied',expired:'Request expired',cancelled:'Call ended'})[lastRequest?.status]||'No pending request';
     render();
   }
   function render(){
-    decisions.forEach(button=>{button.disabled=!approval||transitioning||index!==1;});
-    stop.disabled=!(running||connection==='connecting'||connection==='connected'||connection==='disconnecting');
+    const showPhone=phoneScene||index===1||Boolean(approval);
+    phone.hidden=!showPhone;stack.classList.toggle('has-phone',showPhone);
+    decisions.forEach(button=>{button.disabled=!approval||transitioning||(index!==1&&index!==10);});
+    const active=running||['connecting','connected','disconnecting'].includes(connection);
+    const mode=active?'stop':'restart';
+    if(stop.dataset.mode!==mode){
+      stop.dataset.mode=mode;
+      stop.querySelector('[data-control-icon]').textContent=active?'■':'↻';
+      stop.querySelector('[data-control-label]').textContent=active?'Stop':'Restart';
+      stop.setAttribute('aria-label',active?'Stop demo and call':'Restart presentation');
+    }
+    stop.disabled=false;
     panel.dataset.connection=connection;
   }
   function event(){ /* Errors are displayed by the main demo. */ }
-  function updateFrame(next,state,busy){index=next;transitioning=busy;running=busy||index>0;render();}
+  function updateFrame(next,state,busy){index=next;phoneScene=Boolean(state.phoneNotice&&state.phone>.1);
+    if(state.phoneNotice){
+      phone.querySelector('[data-visitor]').textContent='Another visitor?';
+      phone.querySelector('[data-visit-detail]').textContent='Movement at the street door';
+      phone.querySelector('[data-approval-state]').textContent='New visitor detected';
+    }
+    transitioning=busy;running=busy||(index>0&&index<stops.length-1);render();}
   function updateBackend(state){
     panel.querySelector('[data-door]').textContent=state.door==='open'?'Open':'Closed';
     panel.querySelector('[data-door]').dataset.open=String(state.door==='open');

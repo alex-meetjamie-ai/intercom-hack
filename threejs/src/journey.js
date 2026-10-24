@@ -85,10 +85,22 @@ export function sampleJourney(index, progress) {
     }else if(index===7){
       s.liftY=TOP*(1-phase(p,.08,.88));s.visitor=[CABIN[0],s.liftY,CABIN[2]];s.visitorYaw=Math.PI/2;
       s.liftDoor=phase(p,.90,1);
-    }else{
+    }else if(index===8){
       const walk=walkingRoute([CABIN,WAITING,[0,0,LIFT_POSITION[2]],[0,0,8],[0,0,12.3],STREET,[9,0,13.3]],phase(p,.06,.94));
       s.visitor=walk.position;s.visitorYaw=walk.yaw;s.walking=p>.06&&p<.94;s.liftY=0;
       s.liftDoor=1-phase(p,.12,.25);
+    }
+  }
+  if(index>=9){
+    s.visitor=[9,0,13.3];s.courierGone=true;s.liftY=0;s.streetDoor=0;
+    s.egor=[...HOST_LANDING];s.egorYaw=.2+ROOM_ROTATION;
+    s.phone=0;
+    s.notification=0;
+    if(index===10){
+      const walk=walkingRoute([[-6,0,13.3],STREET],phase(p,.22,.70));
+      s.raptor=walk.position;s.raptorYaw=turn(walk.yaw,Math.PI,phase(p,.65,.76));s.raptorWalking=p>.22&&p<.70;
+      s.raptorPress=phase(p,.76,.87);s.intercomPress=phase(p,.86,.90);s.ring=phase(p,.88,.92);
+      s.facade=phase(p,.12,.5);
     }
   }
   return s;
@@ -143,9 +155,11 @@ export const stops = [
     duration: 5200,
     nextLabel: 'Take it again',
   },
-  {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:4500},
-  {id:'return-down',title:'Back to the courtyard.',duration:7000},
-  {id:'return-to-street',title:'On to the next delivery.',duration:10000},
+  {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:2000},
+  {id:'return-down',title:'Back to the courtyard.',duration:1000},
+  {id:'return-to-street',title:'On to the next delivery.',duration:1200},
+  {id:'surprise-notification',title:'Wait… another visitor?',duration:1},
+  {id:'raptor-arrival',title:'A very unexpected visitor.',duration:5000},
 ];
 
 // One playhead is shared by the actors, doors and camera. Adjacent stops

@@ -65,11 +65,10 @@ function officeFlight(p,aspect){
 export function journeyFrame(index,progress,aspect=1.5){
   const p=Math.max(0,Math.min(1,progress)),state=sampleJourney(index,p);
   if(index>=6){
-    const target=add(state.visitor,[0,2,0]);
-    const follow=shot(target,index===8?14:10,aspect,around(target,5),index===8?direction:[1,.45,1]);
-    if(index===6)return blendFrames(journeyFrame(5,1,aspect),follow,phase(p,0,.35));
-    if(index===7)return blendFrames(journeyFrame(6,1,aspect),follow,phase(p,0,.1));
-    return blendFrames(journeyFrame(7,1,aspect),follow,phase(p,0,.18));
+    const street=shot([2.2,1.5,11.8],6.3,aspect,around([2.5,1.7,11.5],4),[-.6,.3,1]);
+    // Leave the courier to finish his trip off camera; go straight to the next visitor.
+    if(index===6)return blendFrames(journeyFrame(5,1,aspect),street,phase(p,0,1));
+    return street;
   }
   if(index===0)return blendFrames(entrance(aspect),intercom(aspect),phase(p,0,.32));
   if(index===1)return blendFrames(officeFlight(phase(p,0,.60),aspect),phoneClose(state,aspect),phase(p,.50,.98));

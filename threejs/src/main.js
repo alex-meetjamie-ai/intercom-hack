@@ -47,7 +47,7 @@ function start(){
   let toastTimer,denied=false,freeOrbit=false,playhead=stops[0].duration*.32,decisionAnimation=null;
   let callStatus='idle',interactionStarted=false;
   let backendState=null,activeApproval=null,accepted=false,pendingRequest=false;
-  let playback=null,returnAt=null;
+  let playback=null,returnAt=null,raptorCallStarted=false,raptorCallVersion=0;
   let state=sampleJourney(0,.32),canonical=journeyFrame(0,.32,aspect);
 
   function applyFrame(frame){
@@ -95,7 +95,22 @@ function start(){
 
     },
   });
+  async function startRaptorCall(){
+    raptorCallStarted=true;
+    const version=++raptorCallVersion;
+    interactionStarted=true;pendingRequest=false;activeApproval=null;
+    try{
+      if(client.active)await client.disconnect();
+      if(version!==raptorCallVersion||current!==10)return;
+      await client.ring();
+    }catch(error){showApiError(error);}
+  }
   function pressIntercom(){
+    if(current===10){
+      if(client.active){raptorCallVersion++;client.disconnect().catch(showApiError);}
+      else startRaptorCall();
+      return;
+    }
     if(current!==0)return;
     if(client.active){
       interactionStarted=false;pendingRequest=false;playback=null;busy=false;freeOrbit=false;
@@ -127,11 +142,13 @@ function start(){
   }
 
   function chooseOnPhone(choice){
+    if(!busy&&current===10){client.decide(choice==='yes').catch(showApiError);return;}
     if(busy||current!==1)return;
     freeOrbit=false;controls.enabled=false;busy=true;
     decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
   function stopDemo(){
+    raptorCallVersion++;raptorCallStarted=false;
     interactionStarted=false;accepted=false;pendingRequest=false;denied=false;
     decisionAnimation=null;playback=null;returnAt=null;busy=false;current=0;
     playhead=stops[0].duration*.32;freeOrbit=false;controls.enabled=true;
@@ -151,7 +168,7 @@ function start(){
     const point=pointer(event);
     if(current===1)return world.pickPhoneChoice(point,camera);
     const hit=world.pickInteraction(point,camera);
-    return current===0&&hit==='intercom'?hit:null;
+    return (current===0||current===10)&&hit==='intercom'?hit:null;
   }
   // Hit-test before OrbitControls sees pointer-down. Otherwise its start
   // event reframes the scene and moves the button before pointer-up arrives.
@@ -226,12 +243,16 @@ function start(){
       else if(current===2)goTo(3);
       else if(current===3&&playhead>=boundaries[4]-.01)goTo(4);
       else if(current===4)goTo(5);
-      else if(current===5){returnAt??=now;if(now-returnAt>2500)goTo(6);}
+      else if(current===5){returnAt??=now;if(now-returnAt>900)goTo(6);}
       else if(current===6)goTo(7);
       else if(current===7)goTo(8);
+      else if(current===8)goTo(9);
+      else if(current===9)goTo(10);
     }
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor(),callStatus};
+    if(!review&&cursor.index===10&&cursor.progress>=.86&&!raptorCallStarted)startRaptorCall();
+    if(!review&&current===10)state.streetDoor=backendState?.door==='open'?1:0;
     if(!review&&!accepted&&current<=1)state.streetDoor=0;
     if(!interactionStarted&&!review&&current===0){state.intercomReach=0;state.intercomPress=0;state.ring=0;}
     if(denied&&current===1)state.phoneChoice='no';

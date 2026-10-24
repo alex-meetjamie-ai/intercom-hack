@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { group, box, ball, cylinder, beam, label, plant, tree, material } from './geometry.js';
-import { createPerson } from './characters.js';
+import { createPerson,createRaptor } from './characters.js';
 import { TOP } from './journey.js';
 import {OFFICE_ROTATION,OFFICE_ORIGIN,TERRACE,COURIER_LANDING,OFFICE_DOOR_LOCAL,LIFT_POSITION,LIFT_OPENING,REAR_BUILDING,REAR_PASSAGE,ROOF_ROTATION,ROOM_ROTATION,roomPoint,INTERCOM_BUTTON,LIFT_CALL_BUTTON} from './layout.js';
 
@@ -469,6 +469,7 @@ export function createWorld() {
   const courtyard=buildCourtyard(root);
   const street=buildStreet(root),lift=buildLift(root),office=buildLoft(root);
   const courier=createPerson(root,{name:'Courier',courier:true,shirt:'#ffcc00'});
+  const raptor=createRaptor(root);
   const egor=createPerson(root,{name:'Egor',glasses:true,shirt:'teal'});
   const colleague=createPerson(root,{name:'Hello!',shirt:'yellow',position:roomPoint([2.6,0,3.4])});
   const hello=label(root,'Delivered!',2.55,.54,[COURIER_LANDING[0]+.8,TOP+3.9,COURIER_LANDING[2]],{background:'#fcf6e9',color:'#528c80'});
@@ -516,13 +517,14 @@ export function createWorld() {
       door.position.x=side*THREE.MathUtils.lerp(closed,open,atLanding?s.liftDoor:0);
     });
     office.door.rotation.y=s.officeDoor*1.15;
+    raptor.update({position:s.raptor,yaw:s.raptorYaw,walking:s.raptorWalking,press:s.raptorPress||0,time});
     courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,delivered:s.delivered,reachTarget:s.stage===0?INTERCOM_BUTTON:LIFT_CALL_BUTTON,reachNormal:s.stage===0?[0,0,1]:[1,0,0],reachAmount:s.stage===0?s.intercomReach:s.liftReach,showLabel:false,time});
-    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,visitorRequest:s.visitorRequest,waving:s.greet>.5,showLabel:false,time});
+    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,visitorRequest:s.phoneNotice||s.visitorRequest,waving:s.greet>.5,showLabel:false,time});
     colleague.update({position:roomPoint([2.6,0,3.4]),yaw:-.9+ROOM_ROTATION,waving:s.greet>.3,showLabel:false,time});
     const upstairs=s.visitor[1]>=TOP-.5;
     const courierOpacity=Math.max(p.street,p.courtyard,p.shaft*(upstairs?1:p.lowerShaft),upstairs?p.terrace:0);
     const officeOpacity=Math.max(p.loft,p.terrace);
-    fades.courier(courierOpacity,s); fades.egor(officeOpacity,s);
+    fades.courier(s.courierGone?0:courierOpacity,s); fades.egor(officeOpacity,s);
     fades.colleague(officeOpacity,s);
     fades.hello(0,s);
     updateView(camera);
