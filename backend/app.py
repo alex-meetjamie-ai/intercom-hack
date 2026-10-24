@@ -15,6 +15,7 @@ from door import Door
 from elevator import Elevator
 from arrivals import RECORDS, public_record
 from approvals import ApprovalDesk
+from call_history import RecentCalls
 from eleven import ElevenAgent
 from sip import Message, handle
 
@@ -32,6 +33,7 @@ class Jamie:
         self.door = Door()
         self.actions = deque(maxlen=100)
         self.approvals = ApprovalDesk(self.action)
+        self.recent_calls = RecentCalls()
         self.employee_sockets = set()
         self.elevator = Elevator(notify=lambda text: self.action('elevator_auto_return', text, True))
         self.call = None

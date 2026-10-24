@@ -26,6 +26,12 @@ class AgentAudio(AudioStreamTrack):
     def interrupt(self):
         self.buffer.clear()
 
+    async def drain(self):
+        while self.buffer:
+            await asyncio.sleep(.02)
+        # Let the final RTP packets reach the caller before unlocking/hangup.
+        await asyncio.sleep(.2)
+
     async def recv(self):
         if self.started is None:
             self.started = time.monotonic()

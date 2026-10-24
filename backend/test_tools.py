@@ -64,6 +64,19 @@ class ElevatorTests(unittest.IsolatedAsyncioTestCase):
 
 
 class ArrivalTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unmatched_name_gets_only_one_retry_then_can_reach_employee(self):
+        visitor = Visitor(Door())
+        self.addCleanup(visitor.close)
+        self.addCleanup(visitor.elevator.close)
+        visitor.hear('My name is Bob, visiting the office')
+        first = await visitor.tool('first', 'check_calendar_emails', {'query': 'Bob visiting'})
+        self.assertTrue(json.loads(first['result'])['retry_name'])
+        self.assertEqual(await visitor.tool('first', 'check_calendar_emails', {'query': 'Bob visiting'}), first)
+        visitor.hear('Yes, my name is Bob')
+        second = await visitor.tool('second', 'check_calendar_emails', {'query': 'Bob visiting'})
+        self.assertFalse(json.loads(second['result'])['retry_name'])
+        self.assertFalse((await employee_tool(visitor, 'open', 'open_door', {'name': 'Bob'}))['is_error'])
+
     async def test_all_expected_arrivals_ignore_early_and_late(self):
         for record in RECORDS:
             for timing in ('I am three hours early.', 'I am a day late.'):

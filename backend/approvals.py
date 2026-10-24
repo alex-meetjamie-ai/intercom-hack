@@ -6,7 +6,7 @@ import secrets
 
 
 class ApprovalDesk:
-    def __init__(self, notify=None, timeout=90):
+    def __init__(self, notify=None, timeout=40):
         self.timeout = timeout
         self.notify = notify or (lambda *args: None)
         self.requests = {}

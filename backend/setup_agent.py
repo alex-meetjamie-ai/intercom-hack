@@ -23,9 +23,10 @@ async def main(update=False):
         base = 'https://api.elevenlabs.io/v1/convai/agents'
         existing = json.loads(output.read_text())['agent_id'] if output.exists() else None
         url = f'{base}/{existing}' if existing else base + '/create'
-        # Updating only agent settings preserves the remote voice, privacy and
+        # Apply the local prompt and voice while preserving remote privacy and
         # other platform settings. Reuse the saved agent rather than duplicating it.
-        payload = {'conversation_config': {'agent': config['conversation_config']['agent']}} if existing else config
+        payload = {'conversation_config': {k: config['conversation_config'][k]
+                                          for k in ('agent', 'tts')}} if existing else config
         async with client.request('PATCH' if existing else 'POST', url,
                                   headers={'xi-api-key': key}, json=payload) as response:
             data = await response.json()
@@ -38,22 +39,33 @@ async def main(update=False):
             async with client.get(url, headers={'xi-api-key': key}) as response:
                 if response.status != 200:
                     raise SystemExit('Agent updated, but reading it back failed; verify in ElevenLabs.')
-                saved = (await response.json())['conversation_config']['agent']
+                conversation = (await response.json())['conversation_config']
+                saved = conversation['agent']
                 expected = config['conversation_config']['agent']
                 if (saved['first_message'] != expected['first_message'] or
                         saved['prompt']['prompt'] != expected['prompt']['prompt'] or
                         {t['name'] for t in saved['prompt'].get('tools', [])} !=
                         {t['name'] for t in expected['prompt']['tools']}):
                     raise SystemExit('Agent update did not match the local prompt/tools.')
+                for setting in ('llm', 'reasoning_effort'):
+                    if saved['prompt'].get(setting) != expected['prompt'].get(setting):
+                        raise SystemExit('Agent model/reasoning settings were not saved correctly.')
+                if saved.get('dynamic_variables') != expected.get('dynamic_variables'):
+                    raise SystemExit('Recent-call context defaults were not saved correctly.')
             open_tool = next(t for t in saved['prompt']['tools'] if t['name'] == 'open_door')
-            if open_tool.get('response_timeout_secs') != 120 or not open_tool.get('expects_response'):
+            expected_tool = next(t for t in expected['prompt']['tools'] if t['name'] == 'open_door')
+            if (open_tool.get('response_timeout_secs') != expected_tool['response_timeout_secs']
+                    or not open_tool.get('expects_response')):
                 raise SystemExit('Employee approval wait settings were not saved correctly.')
+            for setting, value in config['conversation_config']['tts'].items():
+                if conversation['tts'].get(setting) != value:
+                    raise SystemExit('Agent voice settings were not saved correctly.')
             if open_tool.get('pre_tool_speech') != 'off':
                 raise SystemExit('Automatic approval-tool speech must be off to avoid duplicate acknowledgements.')
             lookup = next(t for t in saved['prompt']['tools'] if t['name'] == 'check_calendar_emails')
             if lookup.get('pre_tool_speech') != 'off':
                 raise SystemExit('Silent lookup setting was not saved correctly.')
-            print('Updated the existing private Jamie agent; verified one acknowledgement, silent tools and approval wait settings.')
+            print('Updated the private Jamie agent; verified prompt, recent-call context, voice and approval settings.')
             return
     output.parent.mkdir(mode=0o700, exist_ok=True)
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

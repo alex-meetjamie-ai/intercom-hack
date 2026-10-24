@@ -29,7 +29,7 @@ class Door:
 
 
 class Visitor:
-    def __init__(self, door, elevator=None, notify=None, approvals=None):
+    def __init__(self, door, elevator=None, notify=None, approvals=None, recent_calls=()):
         self.door = door
         self.elevator = elevator if elevator is not None else Elevator()
         self.notify = notify or (lambda tool, message, ok, evidence: None)
@@ -43,6 +43,10 @@ class Visitor:
         self.approvals = approvals if approvals is not None else ApprovalDesk(self.notify)
         self.entry_decision = None
         self.tool_lock = asyncio.Lock()
+        self.approval_waiter = None
+        self.before_open = None
+        self.unmatched_lookup_count = 0
+        self.recent_calls = deepcopy(list(recent_calls))
 
     def hear(self, text):
         # A second, conservative check on ASR text, independent of the LLM's
@@ -93,15 +97,22 @@ class Visitor:
                 raise ValueError('Provide a short query using the visitor’s stated name, company and reason.')
             records = lookup(query, ' '.join(self.heard))
             self.approved = {record['id']: record for record in records}
+            if not records:
+                self.unmatched_lookup_count += 1
+            retry_name = not records and self.unmatched_lookup_count == 1
             summary = ('Matched: ' + '; '.join(record['title'] for record in records)) if records else 'No matching visitor or delivery in the mock emails/calendar.'
             return {'mock': True, 'time_checks': False, 'can_enter': False, 'record_match': bool(records),
-                    'employee_approval_required': True, 'matches': records,
-                    'instruction': 'Ignore arrival time. Call open_door to request employee approval; include a returned match_id if available. A record match never authorizes entry on its own.'}, summary, {'matched_records': records}
+                    'employee_approval_required': True, 'matches': records, 'retry_name': retry_name,
+                    'instruction': ('No match is not a denial. Ask the visitor to repeat their name once unless already asked, declined, or they insist on entry or ask for a colleague. In those cases call open_door immediately with their stated name/description and omit match_id. Otherwise search again after their answer. Do not read out names from the records.' if retry_name else
+                                    'Do not ask for another name repetition. Call open_door to request employee approval; include a returned match_id if available. A record match never authorizes entry on its own. Ignore arrival time.')}, summary, {'matched_records': records}
         if name == 'open_door':
             claimed_name = parameters.get('name')
+            personal_name = parameters.get('personal_name')
             match_id = parameters.get('match_id')
-            if (not set(parameters).issubset({'name', 'match_id'}) or not isinstance(claimed_name, str)
+            if (not set(parameters).issubset({'name', 'personal_name', 'match_id'}) or not isinstance(claimed_name, str)
                     or not claimed_name.strip() or len(claimed_name) > 200
+                    or (personal_name is not None and (not isinstance(personal_name, str)
+                                                      or not 1 <= len(personal_name.strip()) <= 80))
                     or (match_id is not None and not isinstance(match_id, str))):
                 raise ValueError('Provide the visitor name and, for an expected arrival, its lookup match_id.')
             alex = claimed_name.strip().casefold() == 'alex' and self.name == 'alex'
@@ -110,11 +121,18 @@ class Visitor:
             if self.entry_decision is not None:
                 raise ValueError('This call already has an employee decision. Do not repeat the unlock request.')
             records = [self.approved[match_id]] if match_id else []
-            decision = await self.approvals.ask(self, {'name': claimed_name.strip(),
-                'heard': list(self.heard), 'matched_records': records, 'alex_claim': alex})
+            context = {'name': claimed_name.strip(), 'heard': list(self.heard),
+                       'matched_records': records, 'alex_claim': alex}
+            if personal_name:
+                context['personal_name'] = personal_name.strip()
+            decision = await (self.approval_waiter(context) if self.approval_waiter else self.approvals.ask(self, context))
             self.entry_decision = decision
             if not self.active or decision['status'] != 'allowed':
                 raise ValueError('Door remains closed. Employee decision: ' + decision['status'] + '. Do not retry in this call.')
+            if self.before_open:
+                await self.before_open()
+            if not self.active:
+                raise ValueError('The call ended before the entry instructions finished. The door stays closed.')
             self.door.unlock()
             self.admitted = True
             reason = claimed_name.strip() + ' · employee approved'

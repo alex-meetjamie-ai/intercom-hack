@@ -114,14 +114,27 @@ class SipClient:
         self.http = aiohttp.ClientSession()
         self.ws = await self.http.ws_connect(self.url + '/sip?token=' + self.token,
                                             origin=self.url, protocols=['sip'])
+        self.responses = asyncio.Queue()
+
+        async def read_signaling():
+            # Keep servicing WebSocket heartbeats during long approval waits,
+            # just as the browser does, even when no SIP response is expected.
+            try:
+                async for item in self.ws:
+                    if item.type == aiohttp.WSMsgType.TEXT:
+                        await self.responses.put(item)
+            finally:
+                await self.responses.put(None)
+
+        self.reader = asyncio.create_task(read_signaling())
 
     async def invite(self):
         await self.pc.setLocalDescription(await self.pc.createOffer())
         await self.ws.send_str(self.request('INVITE', self.pc.localDescription.sdp))
 
     async def response(self):
-        item = await self.ws.receive(timeout=30)
-        if item.type != aiohttp.WSMsgType.TEXT:
+        item = await asyncio.wait_for(self.responses.get(), 30)
+        if item is None:
             raise RuntimeError('SIP WebSocket closed')
         return Message.parse(item.data)
 
@@ -157,6 +170,9 @@ class SipClient:
         await self.pc.close()
         if hasattr(self, 'ws'):
             await self.ws.close()
+        if hasattr(self, 'reader'):
+            self.reader.cancel()
+            await asyncio.gather(self.reader, return_exceptions=True)
         if hasattr(self, 'http'):
             await self.http.close()
 

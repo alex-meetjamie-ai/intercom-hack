@@ -4,6 +4,7 @@ Handles INVITE/ACK/BYE/CANCEL/OPTIONS with WebRTC SDP/media. It is deliberately
 not a registrar, proxy or general PBX. The original UDP SIP lab lives in legacy_sip.
 """
 import asyncio
+from collections import deque
 from dataclasses import dataclass
 import re
 import secrets
@@ -71,8 +72,10 @@ class Call:
         self.tag = secrets.token_hex(10)
         self.pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
         self.output = AgentAudio()
-        self.visitor = Visitor(app.door, app.elevator, app.action, app.approvals)
-        self.agent = app.agent_factory(self.visitor, self.output, app.transcript)
+        self.visitor = Visitor(app.door, app.elevator, app.action, app.approvals,
+                               recent_calls=app.recent_calls.snapshot())
+        self.messages = deque(maxlen=30)
+        self.agent = app.agent_factory(self.visitor, self.output, self.transcript)
         self.tasks = set()
         self.closing = False
         self.answered = False
@@ -92,6 +95,10 @@ class Call:
                 self.app.phase = 'connected'
             elif self.pc.connectionState in ('failed', 'closed') and not self.closing:
                 await self.close(send_bye=True)
+
+    def transcript(self, who, text):
+        self.messages.append({'speaker': who, 'text': text})
+        self.app.transcript(who, text)
 
     def spawn(self, coro):
         task = asyncio.create_task(coro)
@@ -150,8 +157,6 @@ class Call:
                 await self.visitor.tool('auto-elevator-' + self.id, 'send_elevator', {'floor': '0'})
             elif self.agent.finished.is_set():
                 pass  # A refused/expired admission is a normal completed call.
-            elif done and not self.closing and getattr(self.agent, 'refusing', False) and not self.agent.error:
-                await self.agent.finished.wait()
             elif done and not self.closing:
                 self.app.error = self.agent.error or 'The conversation ended.'
         except asyncio.TimeoutError:
@@ -192,6 +197,7 @@ class Call:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
         await self.agent.close()
+        self.app.recent_calls.remember(self.visitor, self.messages)
         self.output.stop()
         await self.pc.close()
         if self.app.call is self:

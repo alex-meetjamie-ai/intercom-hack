@@ -10,6 +10,7 @@ from app import Jamie
 from door import Door, Visitor
 from eleven import ElevenAgent
 from media import AgentAudio
+from announcements import TEXT
 from test_jamie import server, until, SipClient
 
 
@@ -126,7 +127,12 @@ class ApprovalTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(visitor.close)
         self.addCleanup(visitor.elevator.close)
         agent = ElevenAgent(visitor, AgentAudio(), lambda *args: None)
+        agent.clips = {name: b'\0' * 640 for name in TEXT}
         agent.ws = Socket()
+        async def play():
+            while True:
+                await agent.output.recv()
+        playback = asyncio.create_task(play())
         receiver = asyncio.create_task(agent.receive())
         try:
             await agent.ws.incoming.put({'type': 'user_transcript', 'user_transcription_event': {'user_transcript': 'My name is Alex'}})
@@ -147,5 +153,7 @@ class ApprovalTests(unittest.IsolatedAsyncioTestCase):
         finally:
             await agent.ws.incoming.put(None)
             await receiver
+            playback.cancel()
+            await asyncio.gather(playback, return_exceptions=True)
         self.assertTrue(visitor.door.open, 'Closing agent transport must preserve the unlock pulse')
         visitor.door.close()

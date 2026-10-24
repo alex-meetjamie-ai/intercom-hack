@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 import aiohttp
 from dotenv import load_dotenv
+from announcements import load_announcements, TEXT, wait_schedule, entry_message
 
 ROOT = Path(__file__).resolve().parent
 
@@ -17,9 +18,7 @@ class AgentError(RuntimeError):
 
 
 class ElevenAgent:
-    refusal_timeout = 12
-    audio_quiet_seconds = 1
-
+    wait_schedule = staticmethod(wait_schedule)
     def __init__(self, visitor, output, transcript):
         self.visitor, self.output, self.transcript = visitor, output, transcript
         self.http = self.ws = self.task = None
@@ -30,24 +29,61 @@ class ElevenAgent:
         self.error = None
         self.tool_tasks = set()
         self.refusing = False
-        self.refusal_response = asyncio.Event()
-        self.refusal_audio_at = None
-        self.finish_task = None
+        self.managing_entry = False
+        self.clips = {}
+        self.announcement_texts = dict(TEXT)
+        self.api_key = self.agent_id = None
+        self.visitor.approval_waiter = self.wait_for_approval
+        self.visitor.before_open = self.entry_instructions
 
-    async def finish_refusal(self):
-        # Wait for the short refusal to reach the caller, including queued PCM.
-        # A stalled/missing model response must not leave a rejected call open.
+    async def announce(self, name):
+        if not self.visitor.active or self.closed.is_set():
+            raise asyncio.CancelledError
+        pcm = self.clips[name]
+        self.transcript('Jamie', self.announcement_texts[name])
+        self.output.push(pcm)
+        async with asyncio.timeout(len(self.output.buffer) / 32000 + 3):
+            await self.output.drain()
+
+    async def wait_for_approval(self, context):
+        # The model is paused on a tool. Local announcements keep the caller
+        # informed without additional model turns, duplicated speech or delays.
+        self.managing_entry = True
+        self.output.interrupt()
+        started = asyncio.get_running_loop().time()
+        decision = asyncio.create_task(self.visitor.approvals.ask(self.visitor, context))
         try:
-            async with asyncio.timeout(self.refusal_timeout):
-                await self.refusal_response.wait()
-                while (self.refusal_audio_at is None or self.output.buffer or
-                       asyncio.get_running_loop().time() - self.refusal_audio_at < self.audio_quiet_seconds):
-                    await asyncio.sleep(.05)
-                # Let the final RTP packets leave the sender and reach playout.
-                await asyncio.sleep(.2)
-        except TimeoutError:
-            pass
-        self.finished.set()
+            for offset, message in self.wait_schedule(self.visitor.approvals.timeout):
+                delay = max(0, started + offset - asyncio.get_running_loop().time())
+                done, _ = await asyncio.wait({decision}, timeout=delay)
+                if done:
+                    break
+                # Do not start an update that would overlap the timeout apology.
+                remaining = self.visitor.approvals.timeout - (asyncio.get_running_loop().time() - started)
+                if len(self.clips[message]) / 32000 + .2 < remaining:
+                    await self.announce(message)
+            return await decision
+        finally:
+            if not decision.done():
+                decision.cancel()
+            await asyncio.gather(decision, return_exceptions=True)
+
+    async def entry_instructions(self):
+        # Visitor checks that the call is still active after this finishes.
+        # The door must remain closed until the full instruction was played.
+        name = (self.visitor.entry_decision or {}).get('personal_name')
+        if name:
+            text = entry_message(name)
+            try:
+                async with asyncio.timeout(5):
+                    clips = await load_announcements(self.http, self.api_key, self.agent_id,
+                                                     texts={'entry': text}, cache_audio=False)
+                self.clips['entry'] = clips['entry']
+                self.announcement_texts['entry'] = text
+            except (TimeoutError, aiohttp.ClientError, RuntimeError):
+                # The optional name must not prevent the full cached directions.
+                pass
+        await self.announce('entry')
 
     async def run_tool(self, tool):
         try:
@@ -57,10 +93,11 @@ class ElevenAgent:
                 # model response while the backend finishes the call.
                 return
             decision = self.visitor.entry_decision or {}
-            if (tool['tool_name'] == 'open_door' and
-                    decision.get('status') in ('denied', 'expired') and not self.refusing):
+            if tool['tool_name'] == 'open_door' and decision.get('status') in ('denied', 'expired'):
                 self.refusing = True
-                self.finish_task = asyncio.create_task(self.finish_refusal())
+                await self.announce('timeout' if decision['status'] == 'expired' else 'denied')
+                self.finished.set()
+                return  # Do not ask the model to generate a second farewell.
             if not self.closed.is_set():
                 await self.ws.send_json({'type': 'client_tool_result', 'tool_call_id': tool['tool_call_id'], **result})
         except asyncio.CancelledError:
@@ -76,8 +113,10 @@ class ElevenAgent:
         if not key or not path.exists():
             raise AgentError('ElevenLabs agent is not configured. Run backend/setup_agent.py.')
         agent_id = json.loads(path.read_text())['agent_id']
+        self.api_key, self.agent_id = key, agent_id
         self.http = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), trust_env=False)
         try:
+            self.clips = await load_announcements(self.http, key, agent_id)
             async with self.http.get('https://api.elevenlabs.io/v1/convai/conversation/get-signed-url',
                     params={'agent_id': agent_id}, headers={'xi-api-key': key}, allow_redirects=False) as response:
                 if response.status != 200:
@@ -87,7 +126,10 @@ class ElevenAgent:
             if target.scheme != 'wss' or target.hostname != 'api.elevenlabs.io':
                 raise AgentError('Unexpected ElevenLabs WebSocket destination')
             self.ws = await self.http.ws_connect(signed, max_msg_size=2**20, heartbeat=20)
-            await self.ws.send_json({'type': 'conversation_initiation_client_data'})
+            await self.ws.send_json({
+                'type': 'conversation_initiation_client_data',
+                'dynamic_variables': {'recent_calls': json.dumps(self.visitor.recent_calls, ensure_ascii=False)},
+            })
             self.task = asyncio.create_task(self.receive())
             await asyncio.wait_for(self.ready.wait(), 15)
             if self.error:
@@ -112,11 +154,10 @@ class ElevenAgent:
                         raise AgentError('Agent audio format must be pcm_16000 in both directions')
                     self.ready.set()
                 elif kind == 'audio':
-                    self.output.push(base64.b64decode(data['audio_event']['audio_base_64'], validate=True))
-                    if self.refusing:
-                        self.refusal_audio_at = asyncio.get_running_loop().time()
+                    if not self.managing_entry:
+                        self.output.push(base64.b64decode(data['audio_event']['audio_base_64'], validate=True))
                 elif kind == 'interruption':
-                    if not self.refusing:
+                    if not self.managing_entry:
                         self.output.interrupt()
                 elif kind == 'ping':
                     await self.ws.send_json({'type': 'pong', 'event_id': data['ping_event']['event_id']})
@@ -125,9 +166,8 @@ class ElevenAgent:
                     self.visitor.hear(text)
                     self.transcript('You', text)
                 elif kind == 'agent_response':
-                    self.transcript('Jamie', data['agent_response_event']['agent_response'][:2000])
-                    if self.refusing:
-                        self.refusal_response.set()
+                    if not self.managing_entry:
+                        self.transcript('Jamie', data['agent_response_event']['agent_response'][:2000])
                 elif kind == 'client_tool_call':
                     tool = data['client_tool_call']
                     task = asyncio.create_task(self.run_tool(tool))
@@ -149,10 +189,10 @@ class ElevenAgent:
             self.closed.set()
 
     async def send(self, pcm):
-        if self.refusing:
-            # The decision is final; do not let a new utterance interrupt the
-            # refusal or start another conversation turn during hangup.
-            return
+        if self.managing_entry:
+            # Maintain a continuous input stream while the office owns the
+            # decision. Visitor speech cannot interrupt the final announcements.
+            pcm = bytes(len(pcm))
         if not self.ws or self.ws.closed or self.closed.is_set():
             raise AgentError(self.error or 'ElevenLabs conversation ended')
         await asyncio.wait_for(self.ws.send_json({'user_audio_chunk': base64.b64encode(pcm).decode()}), 5)
@@ -160,9 +200,6 @@ class ElevenAgent:
 
     async def close(self):
         self.closed.set()
-        if self.finish_task:
-            self.finish_task.cancel()
-            await asyncio.gather(self.finish_task, return_exceptions=True)
         if self.task and self.task is not asyncio.current_task():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)

@@ -7,14 +7,34 @@ including Alex.** Open **http://localhost:8740/admin** in a second tab and press
 **Allow** or **Deny** on the live notification. Matches are supporting evidence;
 an employee can also allow an unmatched visitor. Dates/times never block entry.
 
-Jamie says “Let me check quickly.” once before the lookup/approval sequence, without mentioning employee
-approval. Allow opens the simulated door for five seconds, dispatches the elevator
-to 0 and immediately ends the SIP call, with no extra speech or farewell. The
-unlock timer continues after hangup. Deny, a 90-second timeout, or hanging up
-before approval keeps the door closed. Deny and timeout play one short refusal,
-then the backend hangs up after the audio drains. A stalled refusal is capped at
-12 seconds, so it cannot leave the call open. Automatic pre-tool speech is off
-for both lookup and approval to avoid a second waiting announcement.
+If the name is unclear or the first lookup has no match, Jamie asks for it once
+more and checks again. A second mismatch can still be reviewed by an employee;
+it never grants entry automatically. If the visitor insists on entry, declines
+more questions or asks for a colleague, Jamie skips further clarification and
+requests employee approval with the visitor's stated name or description. Neither
+Alex's name nor a calendar/email match is required to request approval. An actual
+employee denial or timeout still ends the call; insistence cannot override it.
+
+Jamie receives context from the **last five completed calls within 30 minutes**
+at this intercom, including recent dialogue, the employee decision and whether
+the door actually opened. A returning visitor who identifies themselves can
+continue without repeating the introduction or records lookup. If they missed
+the elevator directions or need the door reopened, Jamie requests a **new**
+employee confirmation, repeats the full directions and opens again on Allow.
+It asks one brief clarification if the returning visitor is ambiguous and does
+not assume every new caller is the previous person. Directions-only questions
+can be answered without requesting an opening.
+
+The office has **40 seconds** to respond. Jamie speaks a progress update at
+the start, then every **6 ± 1 seconds** (randomly 5–7 seconds between updates)
+while the request is pending. Timeout plays “Sorry, no one is available to open
+the door.” and hangs up. Deny plays
+“Sorry, I can't let you in.” and hangs up. On Allow, Jamie first says “{Name, if known} please go to the elevator and press
+the button for floor five. The elevator is in the yard, my colleague will wait
+for you upstairs.” Only after the full audio
+finishes does the simulated door open for five seconds, the elevator go to 0,
+and the call end. Hanging up during the instructions leaves the door closed.
+The unlock timer continues after successful hangup.
 The website shows the conversation, tool actions and simulated door/elevator.
 Try DHL delivery, pizza, Maya Weber’s interview, or Tom Schneider’s network visit.
 All example records are fictional.
@@ -66,7 +86,8 @@ Python backend (aiohttp + aiortc)
 Private ElevenLabs voice agent
     │ check_calendar_emails(query) → local mock arrival records
     │ open_door(name, match_id?) → WebSocket notification to employee Admin
-    │     waits for Allow / Deny → unlock only after Allow
+    │     timed spoken updates → waits up to 40 seconds for Allow / Deny
+    │     Allow → spoken elevator instructions → unlock after audio finishes
     │ Backend sends elevator to 0 → SIP BYE (no further model turn)
     ▼
 In-memory door + elevator → website status and action log
@@ -80,8 +101,27 @@ service to maintain for this prototype.
 The browser never receives the ElevenLabs key or signed conversation URL.
 `backend/.env` contains the key; `.state/agent.json` contains the agent ID.
 Both are excluded from Git. The agent definition is in `backend/agent_config.json`.
+Jamie uses the female Sarah voice; its voice ID is saved in that definition and
+applies to both the conversation and the cached announcements.
+DeepSeek Flash 4.1 is explicitly configured with high reasoning effort. Jamie
+must explain that a colleague can confirm entry, never invent an Alex-only rule
+or claim an appointment is mandatory.
 The supplied key needs ElevenLabs Agents read/write permissions to provision the
-agent; normal calls need access to its signed-URL endpoint.
+agent. Calls read its configured voice and use the signed-URL endpoint. Text to
+Speech permission generates the six fixed announcements on the first call;
+later calls reuse PCM files under ignored `backend/.state/speech/`. Changing a
+phrase or voice produces a new cache entry. Personal greetings are generated
+on demand without saving named audio to disk; if generation fails, the complete
+cached directions play without the optional name. `backend/announcements.py` defines
+the exact phrases and timing; `backend/eleven.py` plays them over the same SIP
+call. The model stays silent during this final phase, preventing duplicate speech.
+
+`backend/call_history.py` holds bounded recent-call context in memory. It expires
+after 30 minutes and is cleared on backend restart, with no conversation archive
+written to disk. `backend/eleven.py` sends the snapshot as the `recent_calls`
+[ElevenLabs dynamic variable](https://elevenlabs.io/docs/eleven-agents/customization/personalization/dynamic-variables)
+at the start of each call. History is shared by this single intercom, not a
+verified caller identity. Old approvals and lookup IDs cannot authorize a new call.
 
 ## Admin review
 
@@ -108,9 +148,10 @@ anyone with access to this localhost app can use Admin. The WebSocket requires t
 same-origin session nonce and local Host/Origin checks. No email, browser push
 permission or third-party notification service is needed. Recent approval notices
 (up to 20) are in memory until restart. Denial/expiry cannot be retried in the same
-call. The ElevenLabs tool waits up to 120 seconds; backend expiry is 90 seconds,
-so lack of a response always fails closed. Audio and ping handling stay active
-while the tool waits.
+call. The ElevenLabs tool allows 60 seconds; backend approval expiry is 40 seconds,
+leaving time to play the final instruction or apology. A missing response fails
+closed. Local announcements and WebSocket ping handling continue while waiting;
+visitor speech cannot replace the employee decision or interrupt these messages.
 
 ## Scope
 
@@ -224,10 +265,44 @@ audio response still ending the call. Live tests passed for Alex allowed, an
 unknown visitor denied, an unnamed parcel courier denied, and approval expiry.
 Each used one waiting phrase. Denied/expired calls played a short refusal and
 ended with the door closed and elevator on 5. Forced pre-tool speech is now off
-on both tools; the prompt provides one acknowledgement for the whole sequence.
+on both tools. That earlier version used one model-generated acknowledgement;
+the timed-announcement flow below supersedes it.
+
+Timed-wait and name-retry verification (2026-10-24): all 30 offline tests passed.
+Five real SIP/ElevenLabs cases passed: Alex allowed, unknown visitor denied,
+approval timeout, corrected name after a failed lookup, and unclear name followed
+by clarification. Approval expired after 10 seconds, with updates at 0, 3 and 6
+seconds and a spoken apology before hangup. Approved visitors heard the full
+elevator instruction before the door opened. Offline tests also verified that
+hanging up during that instruction, or missing instruction audio, leaves the
+door closed. Both name-retry scenarios asked exactly once before employee review.
+
+Longer-wait and colleague fallback verification (2026-10-24): all 30 offline tests
+passed. Live SIP/ElevenLabs checks verified DHL admission and a full 40-second
+expiry, with observed update intervals of 5.33, 5.51, 6.32, 5.31, 5.74 and 5.71
+seconds. Both used Sarah's voice. A separate live regression with high reasoning
+verified an unknown visitor saying they had no appointment and asking for a
+colleague: Jamie immediately sent an employee request, said “Let me ask my
+colleague if they can let you in,” and opened only after Allow and the elevator
+instruction. The test SIP client now continuously reads signaling to answer
+WebSocket keepalives during long waits, matching browser behavior.
+
+Personalized directions verification (2026-10-24): 32 offline tests passed,
+including a supplied name and fallback to the full generic directions if name
+audio generation fails. A live Alex call played the complete personalized yard,
+elevator and upstairs-colleague directions before unlocking and hanging up.
+
+Returning-visitor verification (2026-10-24): 36 offline tests passed, covering
+history expiry, size limits, distinguishing employee Allow from an actual
+opening, and a new approval for the next call. Two consecutive live SIP/ElevenLabs
+calls passed: Maya's interview arrival, then a callback after missing the elevator.
+The callback skipped the lookup and repeated questions, requested a fresh Allow,
+repeated the complete directions and reopened the simulated door before hangup.
+Re-run with `backend/.venv/bin/python backend/live_returning.py` (uses credits).
 
 For real voice scenarios (Alex, four mock arrivals, unknown visitor, unnamed
-parcel courier and approval timeout), including hangup and the elevator return:
+parcel courier, approval timeout, colleague escalation, corrected name and
+unclear name), including hangup and the elevator return:
 
 ```sh
 backend/.venv/bin/python backend/live_tools.py

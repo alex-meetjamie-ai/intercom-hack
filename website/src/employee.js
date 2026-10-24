@@ -61,7 +61,7 @@ function render() {
     } else card.append(element('p', 'approval-result', {
       allowed: 'Approval sent to Jamie. Check the call review for the door and elevator actions.',
       denied: 'Jamie was told you denied entry. The door stays closed.',
-      expired: 'Nobody confirmed within 90 seconds. The door stays closed.',
+      expired: 'Nobody confirmed within 40 seconds. The door stays closed.',
       cancelled: 'This call has ended. The request can no longer open the door.'
     }[request.status]));
     return card;
