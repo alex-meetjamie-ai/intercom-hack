@@ -130,14 +130,19 @@ function buildStreet(parent) {
     leaves.push({ pivot, side });
   }
   label(facade, '144', 1.15, .42, [-2.28, 3.9, 10.71], { background: '#eee4cf' });
-  const plaque = group(facade, 'Intercom', [2.04, 1.48, 10.8]);
-  box(plaque, [.36, .7, .14], [0, 0, 0], 'steel');
+  const plaque = group(facade, 'Intercom', [2.04, 1.8, 10.8]);
+  box(plaque, [.62, .9, .14], [0, 0, 0], 'steel');
   const bellMaterial = material('#bdc4b4').clone();
-  for (let y = -.2; y <= .2; y += .1) box(plaque, [.22, .025, .012], [0, y, .085], 'ivory', 0);
-  const bell = ball(plaque, .052, [0, -.26, .12], bellMaterial);bell.name='Intercom button';
+  for(let y=.06;y<=.26;y+=.05)box(plaque,[.38,.016,.012],[0,y,.085],'charcoal',0);
+  const bell=box(plaque,[.50,.19,.08],[0,-.10,.11],bellMaterial,.03);bell.name='Intercom button';
+  const jamieLabels={};
+  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Calling…',connected:'Speak now',offline:'Jamie'})){
+    jamieLabels[key]=label(plaque,text,.45,.125,[0,-.10,.17],{background:'#355648',color:'#ffffff',size:.61});
+    jamieLabels[key].visible=key==='idle';
+  }
   label(street, 'LINIENSTRASSE', 3, .35, [-7.5, .04, 16.3]).rotation.x = -Math.PI / 2;
   bicycle(street, [-5, .05, 12.4], .15); bicycle(street, [6.8, .05, 12.4], -.1);
-  return { group: street, facade, leaves, bell, plaque };
+  return { group: street, facade, leaves, bell, plaque, jamieLabels };
 }
 
 function buildCourtyard(parent) {
@@ -314,7 +319,10 @@ function buildLift(parent) {
   box(call,[.13,1.1,.15],[0,.55,0],'steel',.02);
   box(call,[.22,.44,.30],[0,1.25,0],'charcoal',.035);
   const callButton=ball(call,.065,[.12,1.25,0],material('#b7c6b8'),[.35,1,1]);callButton.name='Elevator call button';
-  return {group:shaft,lowerShaft,crown,cabin,doors,callButton};
+  const dispatch=group(lowerShaft,'Lift dispatch notice',[LIFT_CALL_BUTTON[0]-LIFT_POSITION[0]+.1,2,LIFT_CALL_BUTTON[2]-LIFT_POSITION[2]]);
+  dispatch.rotation.y=Math.PI/2;
+  label(dispatch,'Jamie · sending lift',1.9,.26,[0,0,0],{background:'#355648',color:'#fff9e8'});
+  return {group:shaft,lowerShaft,crown,cabin,doors,callButton,dispatch};
 }
 
 function chair(parent, position, rotation = 0, color = 'charcoal') {
@@ -454,7 +462,12 @@ export function createWorld() {
   const egor=createPerson(root,{name:'Egor',glasses:true,shirt:'teal'});
   const colleague=createPerson(root,{name:'Hello!',shirt:'yellow',position:roomPoint([2.6,0,3.4])});
   const hello=label(root,'Lunch is here!',2.55,.54,[COURIER_LANDING[0]+.8,TOP+3.9,COURIER_LANDING[2]],{background:'#fcf6e9',color:'#528c80'});
-  const ringGroup=group(root,'Doorbell signal',[2.05,1.5,10.99]);
+  const celebration=group(root,'Arrival celebration');
+  const papers=Array.from({length:34},(_,i)=>{
+    const paper=box(celebration,[.07,.12,.012],[0,0,0],['coral','yellow','teal','ivory'][i%4],0);
+    paper.userData={angle:i*2.39996,radius:1.2+(i%7)*.25,height:1+(i%5)*.32};return paper;
+  });
+  const ringGroup=group(root,'Doorbell signal',[2.05,1.7,10.99]);
   const ringMaterial=new THREE.MeshBasicMaterial({color:'#dc9369',transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false});
   const rings=[.3,.5,.7].map(radius=>{
     const r=new THREE.Mesh(new THREE.RingGeometry(radius,radius+.022,40),ringMaterial);ringGroup.add(r);return r;
@@ -478,6 +491,14 @@ export function createWorld() {
   }
   function update(s,time=0,camera) {
     state=s;
+    lift.dispatch.visible=s.stage===3&&s.liftCalled>.15&&s.liftY>.1;
+    celebration.visible=s.greet>.01;
+    for(const paper of papers){
+      const {angle,radius,height}=paper.userData,t=s.greet;
+      paper.position.set(COURIER_LANDING[0]+Math.cos(angle)*radius*t,TOP+.08+height*(1-t)+Math.sin(t*Math.PI)*1.9,COURIER_LANDING[2]+Math.sin(angle)*radius*t);
+      paper.rotation.set(t*5+angle,t*3,t*7+angle);
+    }
+    for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.callStatus||'idle');
     const p={street:1,courtyard:1,loft:1,terrace:1,shaft:1,lowerShaft:1,...s.presentation};
     for (const name of ['street','courtyard','loft','terrace','shaft']) fades[name](p[name],s);
     for(const {pivot,side} of street.leaves) pivot.rotation.y=-side*s.streetDoor*1.4;
@@ -513,5 +534,11 @@ export function createWorld() {
     phoneRay.setFromCamera(pointer,camera);
     return phoneRay.intersectObjects(egor.phoneButtons,false)[0]?.object.userData.phoneChoice||null;
   }
-  return {group:root,layers,update,updateView,pickPhoneChoice,getState:()=>state};
+  function pickInteraction(pointer,camera){
+    phoneRay.setFromCamera(pointer,camera);
+    const objects=[street.bell,...Object.values(street.jamieLabels).filter(item=>item.visible),lift.callButton];
+    const hit=phoneRay.intersectObjects(objects,false)[0];
+    return hit?(hit.object===lift.callButton?'lift':'intercom'):null;
+  }
+  return {group:root,layers,update,updateView,pickPhoneChoice,pickInteraction,getState:()=>state};
 }

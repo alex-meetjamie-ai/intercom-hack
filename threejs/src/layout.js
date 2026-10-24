@@ -29,7 +29,7 @@ export const REAR_BUILDING={left:-17.5,right:11,back:-20.55,front:-8.15};
 export const REAR_PASSAGE={centerX:-2.2,width:3.5,height:4.4};
 
 // Shared physical contact points keep animation, controls and cameras aligned.
-export const INTERCOM_BUTTON=[2.04,1.22,10.988];
+export const INTERCOM_BUTTON=[2.04,1.7,10.988];
 export const LIFT_CALL_BUTTON=[-6.85,1.25,-5.85];
 export const PHONE_POSE={position:[.26,1.42,.60],rotationX:-1.9,rotationZ:Math.PI};
 export const PHONE_CHOICES={yes:[.076,-.205,.029],no:[-.076,-.205,.029]};

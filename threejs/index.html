@@ -15,22 +15,16 @@
         <div id="loading" class="loading" role="status"><span></span></div>
         <div id="render-error" class="render-error" hidden role="alert">The 3D view could not start. Enable WebGL and reload.</div>
       </section>
-      <div class="location-mark" aria-hidden="true"><span class="live-dot"></span>144 <span class="location-city">BERLIN</span></div>
-      <div class="voice-controls"><button id="voice" type="button">Speak to Jamie</button><button id="play-audio" type="button" hidden>Enable audio</button></div>
       <audio id="remote-audio" autoplay playsinline></audio>
-      <p id="live-transcript" class="live-transcript" role="log" aria-live="polite" hidden></p>
-      <button id="restart" class="restart icon-button" type="button" aria-label="Restart journey" title="Restart journey">↺</button>
-      <section id="notification-panel" class="phone-accessibility" aria-label="Phone decision: select Yes or No on the phone screen" hidden>
-        <div class="notification-heading"><span class="live-dot"></span>Doorbell <span class="notification-time">now</span></div>
-        <p id="decision-message" aria-live="polite">Pizza delivery</p>
-        <div class="decision-buttons"><button id="deny" type="button">No, keep door closed</button><button id="allow" type="button">Yes, let them in <span aria-hidden="true">↗</span></button></div>
-      </section>
-      <nav class="journey-controls" aria-label="Journey controls">
-        <button id="back" class="icon-button" type="button" aria-label="Previous moment" disabled>←</button>
-        <span class="moment-count"><span id="step-number">01</span><span class="count-divider">/</span>06</span>
-        <button id="next" type="button"><span id="next-label">Next</span><span aria-hidden="true">→</span></button>
-        <div class="progress-track" aria-hidden="true"><div id="scene-progress"></div></div>
-      </nav>
+      <button id="play-audio" class="audio-fallback" type="button" hidden>Enable audio</button>
+      <p id="live-transcript" class="sr-only" role="log" aria-live="polite" hidden></p>
+      <div class="accessible-controls">
+        <button id="call-jamie" type="button">Call Jamie on the intercom</button>
+        <button id="call-lift" type="button" hidden>Call elevator</button>
+        <button id="allow" type="button" hidden>Yes, let them in</button>
+        <button id="deny" type="button" hidden>No, end call</button>
+        <button id="restart" type="button">Restart presentation</button>
+      </div>
       <p id="step-title" class="sr-only" aria-live="polite" aria-atomic="true"></p>
       <p id="api-feedback" class="toast" role="status" hidden></p>
     </main>

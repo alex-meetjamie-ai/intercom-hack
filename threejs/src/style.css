@@ -18,3 +18,7 @@
 #app[data-scene="1"] #next{display:none}
 
 .voice-controls{position:absolute;z-index:6;top:20px;right:80px;display:flex;gap:8px}.voice-controls button{border:1px solid #ffffff20;border-radius:22px;background:#17211ee8;color:#e8eee7;padding:10px 15px;font-size:12px}.voice-controls button[data-active="true"]{background:#825b48}.live-transcript{position:absolute;z-index:4;bottom:95px;left:50%;transform:translateX(-50%);max-width:min(540px,85vw);padding:12px 18px;border-radius:14px;background:#17211ee8;color:#edf2e9;font-size:13px;line-height:1.5;pointer-events:none}
+.accessible-controls{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+.accessible-controls:focus-within{width:auto;height:auto;clip-path:none;bottom:20px;left:20px;background:#17211e;padding:12px;border-radius:12px;z-index:10}
+.accessible-controls button,.audio-fallback{border:0;border-radius:8px;background:#dbe6d8;color:#253d30;padding:10px 14px;margin:4px}
+.audio-fallback{position:absolute;z-index:10;right:20px;bottom:20px}

@@ -23,6 +23,6 @@ Backend surface used:
 - `GET /api/status`: call, door, transcript, agent configuration and audio counters.
 - `/sip?token=...`: SIP WebSocket; INVITE/ACK starts the call and BYE ends it.
 
-`decide(false)` ends the call. `decide(true)` confirms that the backend has already opened its simulated door; otherwise it throws. The existing backend has no manual approval endpoint. Jamie grants entry through its voice-agent flow. The client does not fabricate an unlock API or send synthetic speech.
+`decide(false)` ends the call. `onRequestReady` fires once when the active call first receives the backend’s access grant. That grant is latched until the next call or an explicit disconnect. `decide(true)` accepts this latched grant for the presentation, even after the backend’s five-second door timer; otherwise it throws. It does not send a manual unlock command. The existing backend has no manual approval endpoint. Jamie grants entry through its voice-agent flow. The client does not fabricate an unlock API or send synthetic speech.
 
 Vite proxies `/api` and `/sip` to the local backend. The backend must have its own ElevenLabs configuration for a live conversation; no keys are placed in the frontend.

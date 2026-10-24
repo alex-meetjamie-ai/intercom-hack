@@ -12,7 +12,8 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite. Use Next to advance. The camera and characters move together along one continuous timeline. Each button press plays the next part of the journey; the courtyard walk and lift ride each take eleven seconds. Drag to orbit once the animation finishes. Back retraces the current action. Restart travel through the same timeline at a faster pace when crossing several stops. Left/right arrow keys navigate when focus is outside a button. Reduced-motion preferences skip the animated movement and show each scene's final state.
+Open the local URL printed by Vite. The presentation starts close to the street intercom. Click its **Jamie** button to start the microphone call through the shared client. The intercom indicates Calling / Listening; click it again to hang up. Backend entry approval moves the camera through the building automatically. Click the physical elevator button to call the lift and continue upstairs. Egor’s phone remains directly clickable. There are no slide numbers or Next buttons. Keyboard users can Tab to equivalent controls; Escape ends an active call.
+
 
 ```sh
 npm run build
@@ -62,3 +63,9 @@ The rear passage is structural geometry: side piers and an overhead brick sectio
 ## Immersive presentation
 
 The 3D canvas fills the screen. A small dark transport control provides Back, Next and replay; Space or the arrow keys also advance. Yes/No are clickable on Egor’s physical phone screen; keyboard users can Tab to equivalent controls. Choosing an answer animates his fingertip tapping it before the story continues. Architectural signs remain, while floating character labels and landing-page copy are hidden. Daylight lighting stays warm and bright. The camera closes in for the intercom press, travels to Egor and his phone, then focuses on the call pedestal and the right-hand elevator entrance. The courier makes physical fingertip contact with both buttons; the lift starts descending after the call. The camera opens out during ascent.
+
+## Live presentation sequence
+
+Click Jamie and speak while the camera stays at the intercom. The active call’s access-granted signal moves the camera to Egor; the presentation then waits indefinitely for a manual Yes on his phone. Yes starts the courtyard walk, simulated agent lift dispatch, boarding and ascent automatically. Arrival ends in a close rooftop greeting with confetti. No ends the call and returns to the intercom.
+
+The existing backend grants and unlocks automatically; the manual gate is in the presentation. Lift dispatch is a scene animation because this backend has no elevator endpoint. Backend code is unchanged.

@@ -1,8 +1,8 @@
 import {UserAgent,Inviter,SessionState} from 'sip.js';
 
-export function createIntercomClient({baseUrl='',audio,onStatus=()=>{},onState=()=>{},onError=()=>{},onAudioBlocked=()=>{}}){
+export function createIntercomClient({baseUrl='',audio,onStatus=()=>{},onState=()=>{},onError=()=>{},onAudioBlocked=()=>{},onRequestReady=()=>{}}){
   const base=baseUrl.replace(/\/$/,'');
-  let lastStatus=null;
+  let lastStatus=null,requestReady=false;
   async function backendJson(path){
     const response=await fetch(`${base}${path}`,{signal:AbortSignal.timeout(5000)});
     if(!response.ok)throw new Error(`Backend unavailable (${response.status}).`);
@@ -26,12 +26,15 @@ export function createIntercomClient({baseUrl='',audio,onStatus=()=>{},onState=(
   async function refresh(){
     if(refreshing)return;
     refreshing=true;
-    try{const state=await backendJson('/api/status');lastStatus=state;onStatus(state);return state;}
+    try{const state=await backendJson('/api/status');lastStatus=state;
+      if(session&&state.door==='open'&&!requestReady){requestReady=true;onRequestReady(state);}
+      onStatus(state);return state;}
     catch{onState(session?'connected':'offline');}
     finally{refreshing=false;}
   }
   async function hangup(){
     const current=session;
+    requestReady=false;
     try{
       if(current?.state===SessionState.Established)await current.bye();
       else if(current?.state===SessionState.Establishing)await current.cancel();
@@ -39,7 +42,7 @@ export function createIntercomClient({baseUrl='',audio,onStatus=()=>{},onState=(
   }
   async function start(){
     if(starting||session)return;
-    starting=true;onState('connecting');
+    requestReady=false;starting=true;onState('connecting');
     try{
       const status=await backendJson('/api/status');lastStatus=status;onStatus(status);
       if(!status.agent_configured)throw new Error('This backend needs its ElevenLabs agent configured before voice calls can start.');
@@ -71,9 +74,10 @@ export function createIntercomClient({baseUrl='',audio,onStatus=()=>{},onState=(
   window.addEventListener('pagehide',()=>{clearInterval(timer);hangup();},{once:true});
   async function decide(allow){
     if(!allow){await hangup();return lastStatus;}
-    const status=await refresh();
-    if(status?.door!=='open')throw new Error('Speak to Jamie to request entry. The existing backend has no manual Yes endpoint.');
-    return status;
+    if(!requestReady)await refresh();
+    if(!requestReady)throw new Error('Keep speaking to Jamie until the entry request is ready.');
+    // This accepts the presentation handoff; the backend already granted access.
+    return {...lastStatus,presentation_accepted:true};
   }
   function destroy(){clearInterval(timer);return hangup();}
   return {ring:start,connect:start,disconnect:hangup,getStatus:refresh,decide,playAudio:play,destroy,get active(){return Boolean(starting||session);}};

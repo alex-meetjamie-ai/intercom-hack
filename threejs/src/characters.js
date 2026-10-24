@@ -10,7 +10,7 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
   const head=ball(body, .32, [0, 1.97, 0], 'skin', [.9, 1.1, .9]);head.name='Head';
   // A real cap covers the skull crown; a flattened sphere left the scalp exposed.
   const hair=new THREE.Mesh(new THREE.SphereGeometry(.335,24,16,0,Math.PI*2,0,1.38),material('hair'));
-  hair.name='Hair cap';hair.position.set(0,1.97,0);hair.scale.set(.94,1.12,.97);hair.castShadow=true;body.add(hair);
+  hair.name='Hair cap';hair.position.set(0,1.97,0);hair.scale.set(.94,courier?.98:1.12,.97);hair.castShadow=true;body.add(hair);
   for(const side of [-1,1])ball(body,.13,[side*.253,2.06,-.055],'hair',[.3,.78,.85]);
   ball(body, .055, [0, 1.94, .285], 'skin');
   for (const x of [-.105, .105]) ball(body, .028, [x, 2, .277], 'charcoal');

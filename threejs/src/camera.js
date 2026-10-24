@@ -43,7 +43,7 @@ export function blendFrames(a,b,t){
   return {target,position:add(target,scale(facing,DISTANCE)),size:mix(a.size,b.size,t),bounds:b.bounds};
 }
 function entrance(aspect){return shot([0,5.6,11.2],26,aspect,streetBounds);}
-function intercom(aspect){return shot([2.05,1.5,11.1],4.4,aspect,around([1.7,1.85,11.15],3),[-.6,.25,1]);}
+function intercom(aspect){return shot([2.05,1.75,11.1],4.4,aspect,around([1.7,1.85,11.15],3),[-.6,.25,1]);}
 function liftClose(state,aspect){const target=add(state.visitor,[0,2.8,-1.3]);return shot(target,8,aspect,around(target,4.5),[1,.38,1]);}
 function liftButton(aspect){return shot([-6.7,1.7,-6.25],5.6,aspect,around(LIFT_CALL_BUTTON,3),[1,.48,1]);}
 function phoneClose(state,aspect){
@@ -88,7 +88,9 @@ export function journeyFrame(index,progress,aspect=1.5){
     frame.position=frame.target.map((value,i)=>value+facing.position[i]-facing.target[i]);
     return frame;
   }
-  return rooftop(aspect);
+  const target=[(state.visitor[0]+state.egor[0])*.5,TOP+1.8,(state.visitor[2]+state.egor[2])*.5];
+  const greeting=shot(target,8.5,aspect,around(target,5),[-.5,.55,1]);
+  return blendFrames(rooftop(aspect),greeting,phase(p,.46,.92));
 }
 export function sceneFrame(index,aspect=1.5){return journeyFrame(index,1,aspect);}
 // All architecture stays in the same world. Only foreground walls become

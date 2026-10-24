@@ -8,14 +8,14 @@ import {createIntercomClient} from '@intercom/client';
 import {TERRACE,OFFICE_ORIGIN} from './layout.js';
 
 const $ = id => document.getElementById(id);
-const next=$('next'),back=$('back'),restart=$('restart');
+const restart=$('restart');
 const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
 let renderer;
 try {
   renderer=new THREE.WebGLRenderer({canvas:$('office-canvas'),antialias:true,alpha:true});
 } catch(error) {
   $('loading').hidden=true;$('render-error').hidden=false;
-  next.disabled=back.disabled=restart.disabled=true;
+  $('call-jamie').disabled=restart.disabled=true;
   console.error('Unable to start the 3D view.',error);
 }
 if(renderer)start();
@@ -41,12 +41,12 @@ function start(){
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(250,250),new THREE.ShadowMaterial({color:0x646d54,opacity:.11}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
-  let current=0,busy=true,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
-  let toastTimer,denied=false,freeOrbit=false,playhead=0,decisionAnimation=null;
-  let backendState=null,admitted=false,pendingAdmission=false;
-  let playback={start:performance.now(),duration:reducedMotion.matches?0:stops[0].duration,from:0,to:boundaries[1],camera:null};
-  let state=sampleJourney(0,0),canonical=journeyFrame(0,0,aspect);
-  controls.addEventListener('start',()=>{if(!busy)freeOrbit=true;});
+  let current=0,busy=false,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
+  let toastTimer,denied=false,freeOrbit=false,playhead=stops[0].duration*.32,decisionAnimation=null;
+  let callStatus='idle',interactionStarted=false;
+  let backendState=null,accepted=false,pendingRequest=false;
+  let playback=null;
+  let state=sampleJourney(0,.32),canonical=journeyFrame(0,.32,aspect);
 
   function applyFrame(frame){
     camera.position.fromArray(frame.position);controls.target.fromArray(frame.target);
@@ -64,14 +64,13 @@ function start(){
   function updateUI(){
     const stop=stops[current];
     $('app').dataset.scene=String(current);
-    $('step-number').textContent=String(current+1).padStart(2,'0');
     $('step-title').textContent=stop.title;
-    $('next-label').textContent=current===1?'Choose on phone':current===5?'Replay':'Next';
-    next.disabled=busy||current===1;back.disabled=busy||current===0;restart.disabled=busy;
+    restart.disabled=busy;
+    $('call-jamie').disabled=busy;
+    $('call-lift').hidden=true;
+    $('allow').hidden=$('deny').hidden=!(current===1&&!busy);
     $('allow').disabled=$('deny').disabled=busy;
     $('viewport').setAttribute('aria-busy',String(busy));
-    $('decision-message').textContent=denied?'Door closed. The courier is waiting.':'Pizza delivery';
-    $('notification-panel').classList.toggle('declined',denied);
   }
   function showApiError(error){
     clearTimeout(toastTimer);$('api-feedback').textContent=error.message||'Voice backend unavailable.';
@@ -80,30 +79,39 @@ function start(){
   const client=createIntercomClient({baseUrl:import.meta.env.VITE_API_BASE_URL||'',audio:$('remote-audio'),onError:showApiError,
     onAudioBlocked:blocked=>{$('play-audio').hidden=!blocked;},
     onState:state=>{
-      $('voice').textContent=state==='connecting'?'Connecting…':state==='connected'?'End call':'Speak to Jamie';
-      $('voice').disabled=state==='connecting';$('voice').dataset.active=String(state==='connected');
+      callStatus=state;
+    },onRequestReady:()=>{
+      if(interactionStarted)pendingRequest=true;
     },onStatus:status=>{
-      if(status.door==='open'&&backendState?.door!=='open'){admitted=true;pendingAdmission=true;}
       backendState=status;
       const message=status.transcript?.at(-1);
       $('live-transcript').textContent=message?`${message.speaker}: ${message.text}`:'';
       $('live-transcript').hidden=!message;
-      $('voice').title=status.agent_configured?'Live microphone call':'Backend agent not configured';
+
     },
   });
-  $('voice').addEventListener('click',()=>client.active?client.disconnect().catch(showApiError):client.ring());
+  function pressIntercom(){
+    if(busy||current!==0)return;
+    if(client.active){client.disconnect().catch(showApiError);return;}
+    interactionStarted=true;
+    playhead=stops[0].duration*.32;
+    goTo(0,{replay:true});
+    client.ring();
+  }
+  $('call-jamie').addEventListener('click',pressIntercom);
+
   $('play-audio').addEventListener('click',client.playAudio);
-  function goTo(index,{replay=false,decision=false}={}){
+  function goTo(index,{replay=false,progress=1}={}){
     if(busy||(index===current&&!replay))return;
     // Keep the same playhead and traverse every intermediate position, even
     // when rewinding or skipping. No midpoint reset, hidden swap or dissolve.
     controls.enableDamping=false;controls.update();controls.enableDamping=true;
     const fromCamera=freeOrbit?snapshotCamera():null;
     controls.enabled=false;freeOrbit=false;
-    const target=boundaries[index+1];
-    const from=(replay&&current===0)?0:playhead;
+    const target=boundaries[index]+stops[index].duration*progress;
+    const from=playhead;
     playback={start:performance.now(),duration:reducedMotion.matches?0:Math.min(14000,Math.max(700,Math.abs(target-from))),from,to:target,camera:fromCamera};
-    current=index;busy=true;denied=false;$('notification-panel').hidden=true;updateUI();
+    current=index;busy=true;denied=false;updateUI();
 
   }
 
@@ -112,29 +120,48 @@ function start(){
     freeOrbit=false;controls.enabled=false;busy=true;
     decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
-  next.addEventListener('click',()=>goTo((current+1)%stops.length));
-  back.addEventListener('click',()=>goTo(Math.max(0,current-1)));
-  restart.addEventListener('click',()=>goTo(0,{replay:true}));
+  restart.addEventListener('click',()=>{
+    client.disconnect().catch(showApiError);interactionStarted=false;
+    accepted=false;pendingRequest=false;current=0;playback=null;playhead=stops[0].duration*.32;freeOrbit=false;updateUI();
+  });
   $('allow').addEventListener('click',()=>chooseOnPhone('yes'));
   $('deny').addEventListener('click',()=>chooseOnPhone('no'));
   let pointerStart=null;
-  function phoneHit(event){
+  function pointer(event){
     const rect=renderer.domElement.getBoundingClientRect();
-    return world.pickPhoneChoice(new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2),camera);
+    return new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);
   }
-  renderer.domElement.addEventListener('pointerdown',event=>{pointerStart=[event.clientX,event.clientY];});
+  function hitAction(event){
+    if(busy)return null;
+    const point=pointer(event);
+    if(current===1)return world.pickPhoneChoice(point,camera);
+    const hit=world.pickInteraction(point,camera);
+    return current===0&&hit==='intercom'?hit:null;
+  }
+  // Hit-test before OrbitControls sees pointer-down. Otherwise its start
+  // event reframes the scene and moves the button before pointer-up arrives.
+  renderer.domElement.addEventListener('pointerdown',event=>{
+    pointerStart={x:event.clientX,y:event.clientY,action:hitAction(event)};
+    if(pointerStart.action)event.stopImmediatePropagation();
+  },true);
   renderer.domElement.addEventListener('pointerup',event=>{
-    if(current!==1||busy||!pointerStart||Math.hypot(event.clientX-pointerStart[0],event.clientY-pointerStart[1])>6)return;
-    const choice=phoneHit(event);if(choice)chooseOnPhone(choice);
-  });
+    const start=pointerStart;pointerStart=null;
+    if(!start?.action)return;
+    event.stopImmediatePropagation();
+    if(Math.hypot(event.clientX-start.x,event.clientY-start.y)>6)return;
+    freeOrbit=false;
+    if(start.action==='intercom')pressIntercom();
+    else if(start.action==='yes'||start.action==='no')chooseOnPhone(start.action);
+  },true);
+  renderer.domElement.addEventListener('pointercancel',()=>{pointerStart=null;});
   renderer.domElement.addEventListener('pointermove',event=>{
-    renderer.domElement.style.cursor=current===1&&!busy&&phoneHit(event)?'pointer':'grab';
+    if(pointerStart&&!pointerStart.action&&!busy&&Math.hypot(event.clientX-pointerStart.x,event.clientY-pointerStart.y)>6)freeOrbit=true;
+    renderer.domElement.style.cursor=hitAction(event)?'pointer':'grab';
   });
   document.addEventListener('keydown',event=>{
-    if(event.altKey||event.ctrlKey||event.metaKey||/INPUT|TEXTAREA|SELECT|BUTTON|A/.test(event.target.tagName)||event.target.isContentEditable)return;
-    if(event.key==='ArrowRight'||event.code==='Space'){event.preventDefault();next.click();}if(event.key==='ArrowLeft'){event.preventDefault();back.click();}
+    if(event.key==='Escape'&&client.active)client.disconnect().catch(showApiError);
   });
-  const observer=new ResizeObserver(resize);observer.observe($('viewport'));resize();updateUI();controls.enabled=false;
+  const observer=new ResizeObserver(resize);observer.observe($('viewport'));resize();updateUI();controls.enabled=true;
 
   // Development-only deterministic samples use the same state and camera
   // path as playback, so route geometry can be reviewed without timing shots.
@@ -175,13 +202,20 @@ function start(){
       if(pending.settled&&now-pending.start>=1100){
         decisionAnimation=null;busy=false;controls.enabled=true;
         if(pending.error){showApiError(pending.error);updateUI();}
-        else if(pending.choice==='yes')goTo(2);
-        else{denied=true;admitted=false;pendingAdmission=false;updateUI();}
+        else if(pending.choice==='yes'){accepted=true;goTo(2);}
+        else{denied=true;accepted=false;pendingRequest=false;interactionStarted=false;goTo(0,{replay:true});}
       }
     }
-    if(pendingAdmission&&!busy&&current<=1){pendingAdmission=false;goTo(2);}
+    if(!review&&!busy&&!decisionAnimation){
+      if(pendingRequest&&current===0){pendingRequest=false;goTo(1);}
+      else if(current===2)goTo(3);
+      else if(current===3&&playhead>=boundaries[4]-.01)goTo(4);
+      else if(current===4)goTo(5);
+    }
     const cursor=atTime(playhead);
-    state={...cursor.state,presentation:presentationFor()};
+    state={...cursor.state,presentation:presentationFor(),callStatus};
+    if(!review&&!accepted&&current<=1)state.streetDoor=0;
+    if(!interactionStarted&&!review&&current===0){state.intercomReach=0;state.intercomPress=0;state.ring=0;}
     if(denied&&current===1)state.phoneChoice='no';
     if(decisionAnimation){
       const p=Math.min(1,(now-decisionAnimation.start)/1100);
@@ -200,8 +234,7 @@ function start(){
     }
     ground.position.y=-.67;ground.material.opacity=.1;
     world.update(state,review?1:elapsed,camera);world.updateView(camera);
-    $('notification-panel').hidden=busy||current!==1||state.notification<.75;
-    $('scene-progress').style.transform=`scaleX(${playhead/boundaries.at(-1)})`;
+
     renderer.render(scene,camera);$('loading').hidden=true;
   });
 }

@@ -49,9 +49,9 @@ export function sampleJourney(index, progress) {
     s.visitor = walk.position; s.visitorYaw = turn(Math.PI, walk.yaw, phase(p,0,.1));
     if(p>.60)s.visitorYaw=turn(s.visitorYaw,-Math.PI/2,phase(p,.60,.68));
     s.walking = p > .1 && p < .64;
-    s.liftReach=phase(p,.65,.69)*(1-phase(p,.74,.82));
-    s.liftPress=phase(p,.69,.71)*(1-phase(p,.73,.75));
-    s.liftCalled=phase(p,.70,.72);
+    s.liftReach=0;
+    s.liftPress=0;
+    s.liftCalled=phase(p,.66,.70);
     s.liftY = TOP * (1 - phase(p, .72, .96));
     s.liftDoor = phase(p, .96, 1);
   }
@@ -107,7 +107,7 @@ export const stops = [
   {
     id: 'courtyard', category: '04 / THROUGH THE COURTYARD', caption: 'LEFT TO THE ELEVATOR',
     title: 'Through the courtyard. Left to the lift.',
-    description: 'Past the trees to the far-left corner. The courier approaches the lift from its right side and waits for it to come down.',
+    description: 'The courier crosses the courtyard. Jamie sends the lift down, and it opens on arrival.',
     hero: ['A courtyard.', 'A small detour.'], note: 'A few footsteps closer to lunch.',
     duration: 11000,
     nextLabel: 'Next',
