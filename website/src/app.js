@@ -1,7 +1,7 @@
 import { UserAgent, Inviter, SessionState } from 'sip.js';
 
 const $ = (id) => document.getElementById(id);
-let ua, session, starting = false, connectedAt, lastTranscript = '', localError = '';
+let ua, session, starting = false, connectedAt, lastTranscript = '', localError = '', lastActions = '', lastArrivals = '';
 const audio = $('remote-audio');
 const emptyTranscript = $('transcript').innerHTML;
 
@@ -102,6 +102,42 @@ async function refresh() {
     $('door-state').textContent = state.door === 'open' ? 'Door open' : 'Door closed';
     $('door-badge').textContent = state.door.toUpperCase();
     $('door-description').textContent = state.door === 'open' ? 'Welcome in. The door will close automatically.' : 'Jamie will let you know when you can enter.';
+    const lift = state.elevator;
+    $('elevator-state').textContent = `Floor ${lift.label}`;
+    document.querySelectorAll('[data-floor]').forEach(el => {
+      const current = el.dataset.floor === String(lift.floor);
+      el.classList.toggle('current', current);
+      if (current) el.setAttribute('aria-current', 'true'); else el.removeAttribute('aria-current');
+    });
+    $('elevator-description').textContent = lift.return_in_seconds !== null
+      ? `Board at floor 0 · leaves for office floor 5 in ${lift.return_in_seconds}s`
+      : lift.floor === 5 ? 'Home floor · Jamie calls it automatically after admission.' : 'Waiting here. Ask Jamie for another floor.';
+    const actions = JSON.stringify(state.actions);
+    if (actions !== lastActions) {
+      lastActions = actions;
+      $('actions').replaceChildren(...state.actions.map(item => {
+        const li = document.createElement('li'); li.className = item.ok ? 'success' : 'refused';
+        li.textContent = item.text; return li;
+      }));
+      if (!state.actions.length) {
+        const li = document.createElement('li'); li.className = 'activity-empty';
+        li.textContent = 'Lookups, door openings and elevator moves appear here.'; $('actions').append(li);
+      }
+      $('actions').scrollTop = $('actions').scrollHeight;
+    }
+    const arrivals = JSON.stringify(state.mock_arrivals);
+    if (arrivals !== lastArrivals) {
+      lastArrivals = arrivals;
+      $('mock-arrivals').replaceChildren(...state.mock_arrivals.map(item => {
+        const article = document.createElement('article'); article.className = 'arrival-card';
+        const source = document.createElement('p'); source.className = 'arrival-source';
+        source.textContent = `MOCK ${item.source.toUpperCase()} · FLOOR ${item.destination_floor}`;
+        const title = document.createElement('h3'); title.textContent = item.title;
+        const phrase = document.createElement('p'); phrase.className = 'arrival-phrase'; phrase.textContent = `“${item.example}”`;
+        const time = document.createElement('small'); time.textContent = `${item.scheduled_time} · time ignored`;
+        article.append(source, title, phrase, time); return article;
+      }));
+    }
     const transcript = JSON.stringify(state.transcript);
     if (transcript !== lastTranscript) {
       lastTranscript = transcript;

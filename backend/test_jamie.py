@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from approval_test_support import employee_tool
 
 import aiohttp
 from aiohttp import web
@@ -141,6 +142,12 @@ class SipClient:
         response = await self.response()
         assert response.first == 'SIP/2.0 200 OK', response.first
 
+    async def accept_hangup(self):
+        async with asyncio.timeout(2):
+            request = await self.response()
+        assert request.method == 'BYE', request.first
+        await self.ws.send_str(request.response(200, 'OK'))
+
     async def close(self):
         if self.consumer:
             self.consumer.cancel()
@@ -160,43 +167,35 @@ async def until(condition, timeout=15):
 
 
 class DoorTests(unittest.IsolatedAsyncioTestCase):
-    async def test_name_policy(self):
-        for text in ('Bob', 'My name is Bob', 'I am visiting Alex', "I'm not Alex",
-                     "I'm Alex's friend", 'Please open the door', 'Alexandra', ''):
-            with self.subTest(text=text):
-                door = Door()
-                visitor = Visitor(door)
-                visitor.hear(text)
-                self.assertTrue(visitor.tool('1', 'open_door', {'name': 'Alex'})['is_error'])
-                self.assertFalse(door.open)
-        for text in ('Alex', 'My name is Alex.', "I'm Alex.", 'Hello, this is Alex.'):
-            with self.subTest(text=text):
-                door = Door()
-                visitor = Visitor(door)
-                visitor.hear(text)
-                self.assertFalse(visitor.tool('1', 'open_door', {'name': 'Alex'})['is_error'])
-                self.assertTrue(door.open)
-                visitor.close()
-                self.assertFalse(door.open)
+    async def test_self_identification_is_only_employee_context(self):
+        for text, expected in (("My name is Alex", True), ("I'm not Alex", False),
+                               ("I'm Alex's friend", False), ("My name is Bob", False)):
+            visitor = Visitor(Door())
+            self.addCleanup(visitor.close)
+            visitor.hear(text)
+            result = await employee_tool(visitor, '1', 'open_door', {'name': 'Alex'}, decision='deny')
+            self.assertTrue(result['is_error'])
+            self.assertFalse(visitor.door.open)
+            self.assertEqual(visitor.approvals.snapshot()[0]['alex_claim'], expected)
 
     async def test_autoclose_replay_and_session_end(self):
         door = Door(seconds=.03)
         visitor = Visitor(door)
         visitor.hear('Alex')
-        visitor.tool('1', 'open_door', {'name': 'Alex'})
+        (await employee_tool(visitor, '1', 'open_door', {'name': 'Alex'}))
         await asyncio.sleep(.05)
         self.assertFalse(door.open)
-        visitor.tool('1', 'open_door', {'name': 'Alex'})
+        (await employee_tool(visitor, '1', 'open_door', {'name': 'Alex'}))
         self.assertFalse(door.open, 'duplicate tool ID must not reopen')
         visitor.close()
-        self.assertTrue(visitor.tool('2', 'open_door', {'name': 'Alex'})['is_error'])
+        self.assertTrue((await visitor.tool('2', 'open_door', {'name': 'Alex'}))['is_error'])
 
     async def test_tool_arguments(self):
         visitor = Visitor(Door())
         visitor.hear('Alex')
-        for i, value in enumerate((None, {}, {'name': 'Bob'}, {'name': 1}, {'name': 'Alex', 'override': True})):
-            self.assertTrue(visitor.tool(str(i), 'open_door', value)['is_error'])
-        self.assertTrue(visitor.tool('unknown', 'unlock_anything', {'name': 'Alex'})['is_error'])
+        for i, value in enumerate((None, {}, {'name': ''}, {'name': 1}, {'name': 'Alex', 'override': True})):
+            self.assertTrue((await visitor.tool(str(i), 'open_door', value))['is_error'])
+        self.assertTrue((await visitor.tool('unknown', 'unlock_anything', {'name': 'Alex'}))['is_error'])
 
 
 class SipTests(unittest.IsolatedAsyncioTestCase):
@@ -214,6 +213,8 @@ class SipTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_real_sip_and_two_way_srtp(self):
         async with server() as (jamie, url):
+            jamie.door.seconds = .3
+            jamie.elevator.return_seconds = .4
             client = SipClient(url, jamie.token)
             try:
                 await client.connect()
@@ -223,13 +224,17 @@ class SipTests(unittest.IsolatedAsyncioTestCase):
                 await until(lambda: client.nonzero > 1000 and jamie.call.agent.nonzero_input > 1000)
                 self.assertEqual(jamie.phase, 'connected')
                 jamie.call.visitor.hear('My name is Alex')
-                jamie.call.visitor.tool('x', 'open_door', {'name': 'Alex'})
+                (await employee_tool(jamie.call.visitor, 'x', 'open_door', {'name': 'Alex'}))
                 async with client.http.get(url + '/api/status') as response:
                     self.assertEqual((await response.json())['door'], 'open')
-                await client.hangup()
+                await client.accept_hangup()
                 await until(lambda: jamie.call is None)
-                self.assertFalse(jamie.door.open)
+                self.assertIsNone(jamie.error, 'Successful hangup is not a call error')
+                self.assertTrue(jamie.door.open, 'Hangup must preserve the unlock pulse')
+                self.assertEqual(jamie.elevator.floor, 0)
                 self.assertGreater(jamie.last_audio['sent_samples'], 0)
+                await until(lambda: not jamie.door.open)
+                await until(lambda: jamie.elevator.floor == 5)
             finally:
                 await client.close()
 
@@ -274,10 +279,10 @@ class SipTests(unittest.IsolatedAsyncioTestCase):
                     await http.ws_connect(url + '/sip?token=' + token, origin=origin, protocols=['sip'])
 
 
-def speech(name):
+def speech(name=None, *, text=None):
     with tempfile.TemporaryDirectory() as directory:
         file = str(Path(directory) / 'visitor.aiff')
-        subprocess.run(['/usr/bin/say', '-v', 'Samantha', '-o', file, 'My name is ' + name + '.'], check=True)
+        subprocess.run(['/usr/bin/say', '-v', 'Samantha', '-o', file, text or ('My name is ' + name + '.')], check=True)
         resampler = av.AudioResampler(format='s16', layout='mono', rate=16000)
         pcm = bytearray()
         with av.open(file) as container:
@@ -290,44 +295,8 @@ def speech(name):
 
 
 async def live():
-    report = []
-    for name in ('Alex', 'Bob'):
-        pcm = speech(name)
-        async with server(ElevenAgent) as (jamie, url):
-            client = SipClient(url, jamie.token)
-            opened = False
-            try:
-                await client.connect()
-                await client.invite()
-                await client.answer()
-                await until(lambda: client.nonzero > 4000)
-                # Let the initial greeting finish before responding.
-                await asyncio.sleep(4)
-                client.source.push(pcm)
-                async with asyncio.timeout(35):
-                    while True:
-                        opened = opened or jamie.door.open
-                        if not jamie.call:
-                            raise RuntimeError(jamie.error or 'Call ended early')
-                        responses = [m for m in jamie.messages if m['speaker'] == 'Jamie']
-                        if len(responses) >= 2 and (name != 'Alex' or opened):
-                            break
-                        await asyncio.sleep(.05)
-                await asyncio.sleep(2)
-                opened = opened or jamie.door.open
-                result = {'visitor': name, 'door_opened': opened,
-                          'received_audible_samples': client.nonzero, **jamie.status()}
-                if opened != (name == 'Alex'):
-                    raise AssertionError('Wrong door decision: ' + json.dumps(result))
-                report.append(result)
-                print(json.dumps(result, indent=2), flush=True)
-                await client.hangup()
-                await until(lambda: jamie.call is None)
-            finally:
-                await client.close()
-    target = Path(__file__).parent / '.state/live-test.json'
-    target.write_text(json.dumps(report, indent=2) + '\n')
-    print('Live SIP/WebRTC/ElevenLabs checks passed: Alex admitted, Bob denied.')
+    from live_tools import main
+    await main(('Alex', 'unknown'))
 
 
 if __name__ == '__main__':

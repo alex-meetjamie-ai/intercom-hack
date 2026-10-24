@@ -24,6 +24,22 @@ class ElevenAgent:
         self.ready = asyncio.Event()
         self.closed = asyncio.Event()
         self.error = None
+        self.tool_tasks = set()
+
+    async def run_tool(self, tool):
+        try:
+            result = await self.visitor.tool(tool['tool_call_id'], tool['tool_name'], tool.get('parameters'))
+            if tool['tool_name'] == 'open_door' and not result['is_error']:
+                # Admission triggers SIP hangup. Do not prompt another spoken
+                # model response while the backend finishes the call.
+                return
+            if not self.closed.is_set():
+                await self.ws.send_json({'type': 'client_tool_result', 'tool_call_id': tool['tool_call_id'], **result})
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self.error = 'Could not complete the tool request.'
+            self.closed.set()
 
     async def start(self):
         load_dotenv(ROOT / '.env')
@@ -81,9 +97,9 @@ class ElevenAgent:
                     self.transcript('Jamie', data['agent_response_event']['agent_response'][:2000])
                 elif kind == 'client_tool_call':
                     tool = data['client_tool_call']
-                    result = self.visitor.tool(tool['tool_call_id'], tool['tool_name'], tool.get('parameters'))
-                    await self.ws.send_json({'type': 'client_tool_result',
-                                            'tool_call_id': tool['tool_call_id'], **result})
+                    task = asyncio.create_task(self.run_tool(tool))
+                    self.tool_tasks.add(task)
+                    task.add_done_callback(self.tool_tasks.discard)
                 elif kind == 'error' or 'error' in data:
                     raise AgentError('ElevenLabs reported a conversation error')
         except asyncio.CancelledError:
@@ -91,6 +107,11 @@ class ElevenAgent:
         except Exception as exc:
             self.error = str(exc) if isinstance(exc, AgentError) else 'ElevenLabs connection failed'
         finally:
+            self.visitor.close()
+            tasks = list(self.tool_tasks)
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             self.ready.set()
             self.closed.set()
 

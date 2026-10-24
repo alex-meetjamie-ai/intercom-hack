@@ -1,9 +1,30 @@
 # Jamie intercom prototype
 
 Open **http://localhost:8740**, press **Jamie**, allow the microphone, and speak.
-Jamie asks your name. “My name is Alex” allows the agent to open the simulated
-door; other names are refused. The door closes after five seconds or when the
-call ends. Conversation text and the door state appear beside the call button.
+Jamie asks your name and reason for visiting, checks mock emails/calendar entries,
+and asks a Jamie employee to decide. **Every visitor needs employee approval,
+including Alex.** Open **http://localhost:8740/admin** in a second tab and press
+**Allow** or **Deny** on the live notification. Matches are supporting evidence;
+an employee can also allow an unmatched visitor. Dates/times never block entry.
+
+Jamie says “Let me check quickly.” while waiting, without mentioning employee
+approval. Allow opens the simulated door for five seconds, dispatches the elevator
+to 0 and immediately ends the SIP call, with no extra speech or farewell. The
+unlock timer continues after hangup. Deny, a 90-second timeout, or hanging up
+before approval keeps the door closed.
+The website shows the conversation, tool actions and simulated door/elevator.
+Try DHL delivery, pizza, Maya Weber’s interview, or Tom Schneider’s network visit.
+All example records are fictional.
+
+After admitting someone, the backend automatically calls the elevator to **0**
+before ending the call; it will take them to our office on **5**. All mock office
+arrivals have floor 5 as their destination. The elevator starts on **5** and travels there after
+**10 uninterrupted seconds** on floor 0 only, and accepts floors **0, E, 1–5**.
+**E and 0 are separate stops.** Floor E has no automatic return.
+Repeating a floor-0 request does not restart the countdown; sending it to
+another floor cancels it. The return timer continues after the call ends. Changes
+between floors are instantaneous in this simulation. The call has already ended
+after admission, so subsequent spoken floor requests are no longer accepted.
 
 **How it works:** http://localhost:8740/how-it-works shows an animated connection
 diagram. Its default full-system view includes all eight photographed SKS terminals,
@@ -40,9 +61,12 @@ Python backend (aiohttp + aiortc)
     │ 16 kHz mono PCM over an authenticated WebSocket
     ▼
 Private ElevenLabs voice agent
-    │ open_door(name) client tool → backend checks the transcript and name
+    │ check_calendar_emails(query) → local mock arrival records
+    │ open_door(name, match_id?) → WebSocket notification to employee Admin
+    │     waits for Allow / Deny → unlock only after Allow
+    │ Backend sends elevator to 0 → SIP BYE (no further model turn)
     ▼
-In-memory door → website open/closed label
+In-memory door + elevator → website status and action log
 ```
 
 SIP sets up the call; audio travels over WebRTC, not over the SIP WebSocket.
@@ -56,10 +80,45 @@ Both are excluded from Git. The agent definition is in `backend/agent_config.jso
 The supplied key needs ElevenLabs Agents read/write permissions to provision the
 agent; normal calls need access to its signed-URL endpoint.
 
+## Admin review
+
+Open **http://localhost:8740/admin** (or use Admin in the navigation).
+It shows the exact mock inbox and calendar records used by the running backend,
+including message/event bodies, scheduled times and matching rules. Times are
+informational only. No real email or calendar accounts are connected.
+
+Keep Admin open in a second tab while calling Jamie. The review shows the visitor
+transcript, the agent's lookup query, links to matching records, the actual tool
+request/response, and whether the backend granted or blocked an unlock. A lookup
+with no match is shown separately from a blocked unlock; it may lead to a follow-up
+question. Every visitor still needs employee approval. The review includes the
+approval request and employee decision as well as the resulting unlock.
+
+The review retains up to 100 actions and the last 30 transcript messages in memory,
+until the next call or server restart. Records are read-only; employee decisions
+use the authenticated local `/employee` WebSocket. On connection/reconnection it
+sends a snapshot, then pushes each change. Multiple tabs receive updates; the
+first decision wins. Old requests and replayed tools cannot reopen the door.
+
+This is a local employee-view demo, **not separate employee account authentication**:
+anyone with access to this localhost app can use Admin. The WebSocket requires the
+same-origin session nonce and local Host/Origin checks. No email, browser push
+permission or third-party notification service is needed. Recent approval notices
+(up to 20) are in memory until restart. Denial/expiry cannot be retried in the same
+call. The ElevenLabs tool waits up to 120 seconds; backend expiry is 90 seconds,
+so lack of a response always fails closed. Audio and ping handling stay active
+while the tool waits.
+
 ## Scope
 
-This is a **simulated door**, with no physical lock, SKS bus, Ring, or UDM connection.
-“Alex” is a spoken self-identification rule, not identity verification.
+The **door and elevator are simulated**, with no physical lock, elevator, SKS bus,
+Ring, or UDM connection. Email and calendar data come from
+`backend/mock_arrivals.json`; no real inbox or calendar is accessed.
+`check_calendar_emails` matches both the model's query and the visitor transcript.
+The `open_door` tool requires an explicit employee Allow for the active call.
+Spoken claims, identifying as Alex and matching records cannot bypass that gate.
+Records and visitor names are context, not identity verification. All three tools are defined in `backend/agent_config.json`; handlers
+are in `backend/door.py`, `backend/approvals.py`, `backend/arrivals.py` and `backend/elevator.py`.
 The SIP endpoint supports the browser call flow, not arbitrary SIP phones,
 registration, trunking, or a full PBX. Calls use the ElevenLabs cloud and account
 credits. The app keeps its transcript in memory; ElevenLabs account retention
@@ -87,15 +146,21 @@ npm --prefix website run build
 ```
 
 On this Mac, **do not overwrite the existing `.env`**; it is already configured.
-`setup_agent.py` creates an agent only when no saved ID exists. Editing the local
-JSON alone does not update the existing remote agent.
+`setup_agent.py` creates an agent only when no saved ID exists. After editing the
+local definition, update the existing remote agent (keeps its ID and platform settings):
+
+```sh
+backend/.venv/bin/python backend/setup_agent.py --update
+```
+
+The script reads the remote configuration back to verify the prompt and tools.
 
 ## Verification
 
 Offline protocol, media, and door-policy tests:
 
 ```sh
-backend/.venv/bin/python -m unittest discover -s backend -p 'test_jamie.py' -v
+backend/.venv/bin/python -m unittest discover -s backend -p 'test_*.py' -v
 ```
 
 Actual ElevenLabs integration with synthetic “Alex” and “Bob” speech (macOS
@@ -107,8 +172,9 @@ backend/.venv/bin/python backend/test_jamie.py --live
 
 This creates real SIP/WebRTC calls to a temporary backend, checks the returned
 audio and the agent's tool decision, and saves a local report in
-`backend/.state/live-test.json`. Both visitors were tested successfully on
-2026-10-24: Alex admitted, Bob denied, with nonzero audio in both directions.
+`backend/.state/live-tools-test.json`. The test acts as the employee through the
+WebSocket, checks that the door stays closed while waiting, then allows Alex and
+denies Bob. It does not change decisions in the normal app.
 
 Browser SIP.js integration test with generated tones and a fake local agent:
 
@@ -122,4 +188,50 @@ The test server is separate from the normal app and sends nothing to ElevenLabs.
 Stop it when finished. The production server does not expose those test routes.
 The SIP.js browser check passed on 2026-10-24: INVITE/ACK/BYE completed, generated
 audio reached the backend, returned audio was decoded by the browser, and the
-session returned to idle with the door closed. All seven offline tests also pass.
+session returned to idle with the door closed.
+
+The expanded offline suite covers arrival matching, early/late arrivals, rejected
+lookups, call-scoped approval, tool replay, all elevator floors, cancellation and
+automatic return, plus ElevenLabs client-tool message/result correlation.
+
+Employee approval verification (2026-10-24): all 24 offline tests passed, including
+WebSocket broadcasts/reconnects, first-decision-wins, denied/expired/cancelled
+requests and continued voice-agent ping handling while approval is pending.
+Browser checks at desktop and mobile sizes verified Allow opens the simulated
+door and dispatches the lift to 0, while Deny keeps both unchanged, including for
+Alex. The live app has no automatic employee decisions; test approvals are sent
+only by the isolated test clients.
+Earlier employee-gate verification: three real SIP/ElevenLabs cases passed: Alex
+allowed, DHL allowed, and an unknown sales visitor denied. Each stayed closed
+before the WebSocket decision. Elevator dispatch, spoken boarding directions and
+the return to floor 5 were verified after approval. Other saved live-test cases
+in the report predate this policy and have not been rerun with the employee gate.
+
+Immediate-hangup verification (2026-10-24): all 24 offline tests passed, including
+server-initiated SIP BYE, no call error on success, and preserving the door pulse
+and elevator timer after disconnect. Live Alex and DHL calls verified employee
+approval, immediate BYE with no subsequent agent speech, and elevator dispatch.
+A live denied visitor heard a short refusal and the door stayed closed. The final
+silent-lookup setting was retested with DHL and the denied visitor; both used
+“Let me check quickly” once and did not mention employee approval.
+
+For all six real voice scenarios (Alex, four mock arrivals, unknown visitor),
+immediate hangup on admission and the production ten-second automatic return:
+
+```sh
+backend/.venv/bin/python backend/live_tools.py
+```
+
+This uses synthetic speech, temporary local SIP servers and ElevenLabs credits.
+Its report stays in ignored `backend/.state/live-tools-test.json`.
+
+Earlier verification, before employee confirmation was added: all 15 offline tests passed. Six live SIP/ElevenLabs
+scenarios passed: Alex, DHL, pizza, early interview, late technician and an
+unexpected sales visitor. The first five were admitted; the sales visitor was
+refused after a lookup. Floor 3 and the ten-second return to 5 were verified.
+The website was checked at desktop and mobile widths.
+
+Earlier floor correction verified: 0 and E are separate stops. All 16 offline tests pass,
+including staying on E and cancelling the floor-0 timer when moving to E. A live
+DHL voice call verified automatic dispatch to 0 without a visitor request, spoken
+boarding directions to the fifth-floor office, and the ten-second trip to 5.

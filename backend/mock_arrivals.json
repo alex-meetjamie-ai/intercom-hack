@@ -1,0 +1,97 @@
+[
+  {
+    "id": "email-dhl",
+    "source": "email",
+    "title": "DHL parcel for the Jamie office",
+    "from": "DHL delivery notification (mock)",
+    "body": "We are delivering a parcel of office supplies. Please let the DHL courier in and direct them to floor 5.",
+    "scheduled_time": "09:00–11:00",
+    "example": "I'm Chris from DHL, delivering a parcel for your office.",
+    "match_groups": [
+      [
+        "dhl",
+        "d h l"
+      ],
+      [
+        "parcel",
+        "package",
+        "delivery",
+        "delivering",
+        "courier",
+        "paket",
+        "lieferung"
+      ]
+    ],
+    "destination_floor": 5
+  },
+  {
+    "id": "email-pizza",
+    "source": "email",
+    "title": "Pizza delivery for the team",
+    "from": "Pizzeria Bella (mock)",
+    "body": "Your team lunch order is confirmed. Admit the pizza delivery person and send them to floor 5.",
+    "scheduled_time": "12:30",
+    "example": "I've got a pizza delivery for the Jamie team.",
+    "match_groups": [
+      [
+        "pizza",
+        "pizzas",
+        "pizzeria"
+      ],
+      [
+        "delivery",
+        "delivering",
+        "deliver",
+        "order",
+        "lieferung",
+        "bestellung"
+      ]
+    ],
+    "destination_floor": 5
+  },
+  {
+    "id": "calendar-interview",
+    "source": "calendar",
+    "title": "Interview · Maya Weber",
+    "from": "Office calendar (mock)",
+    "body": "Maya Weber is expected for a job interview with the Jamie team. Reception is on floor 5.",
+    "scheduled_time": "14:00–15:00",
+    "example": "My name is Maya Weber. I'm here for my interview, but I'm two hours early.",
+    "match_groups": [
+      [
+        "maya",
+        "maia"
+      ],
+      [
+        "interview",
+        "bewerbung",
+        "vorstellungsgespräch"
+      ]
+    ],
+    "destination_floor": 5
+  },
+  {
+    "id": "calendar-technician",
+    "source": "calendar",
+    "title": "Network maintenance · Tom Schneider",
+    "from": "Office calendar (mock)",
+    "body": "Tom Schneider is expected to repair the network equipment on floor 5. Admit him and direct him to floor 5.",
+    "scheduled_time": "16:00–17:00",
+    "example": "I'm Tom Schneider, the technician here to repair the network. Sorry I'm late.",
+    "match_groups": [
+      [
+        "tom schneider"
+      ],
+      [
+        "technician",
+        "maintenance",
+        "network",
+        "repair",
+        "router",
+        "techniker",
+        "wartung"
+      ]
+    ],
+    "destination_floor": 5
+  }
+]

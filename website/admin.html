@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ed"><title>Admin — Jamie</title>
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="/" aria-label="Jamie home">j<span>·</span></a><span class="top-title">JAMIE / INTERCOM</span><nav class="page-nav" aria-label="Main"><a href="/">Intercom</a><a href="/how-it-works">How it works</a><a href="/admin" aria-current="page">Admin</a></nav><span class="connection"><i id="connection-dot"></i><span id="connection-text">Connecting</span></span></header>
+  <main class="admin-page">
+    <section class="admin-intro"><div><p class="eyebrow">ADMIN / EXPECTED ARRIVALS</p><h1>The context behind<br>the welcome.</h1><p>Read what Jamie knows. Follow the evidence behind each decision.</p></div><a class="review-link" href="#review">Review the latest call <span aria-hidden="true">↘</span></a></section>
+    <section class="employee-desk" aria-labelledby="employee-heading">
+      <div class="employee-heading"><div><p class="eyebrow">JAMIE EMPLOYEE</p><h2 id="employee-heading">You decide who comes in.</h2></div><span id="employee-connection" class="employee-connection">Connecting notifications…</span></div>
+      <p class="employee-copy">Jamie waits for your decision before opening the door — even for Alex. Requests expire after 90 seconds.</p>
+      <div id="employee-alert" role="status" class="employee-alert" aria-live="polite"></div>
+      <p id="employee-error" class="error" role="alert" hidden></p>
+      <div id="employee-requests"><p class="employee-empty">No visitor waiting. Keep this page open to receive approval requests.</p></div>
+      <a class="employee-test-link" href="/" target="_blank" rel="noopener">Open intercom in a new tab ↗</a>
+    </section>
+    <div class="policy-strip"><span class="mock-label"><i></i>MOCK DATA</span><p>Early or late is fine. <strong>Scheduled times never block entry.</strong></p><span class="office-label">OFFICE / FLOOR 5</span></div>
+    <div id="load-error" class="error" role="alert" hidden>Can’t reach the backend. Any records below are from the last successful update; retrying automatically.</div>
+    <div class="source-columns">
+      <section class="source-section" aria-labelledby="emails-heading"><div class="section-heading"><div><span class="section-icon" aria-hidden="true">✉</span><h2 id="emails-heading">Emails</h2></div><span id="email-count" class="count">—</span></div><div id="emails" class="record-list"><p class="loading-copy">Loading the inbox…</p></div></section>
+      <section class="source-section" aria-labelledby="calendar-heading"><div class="section-heading"><div><span class="section-icon calendar-icon" aria-hidden="true">▦</span><h2 id="calendar-heading">Calendar</h2></div><span id="calendar-count" class="count">—</span></div><div id="calendar" class="record-list"><p class="loading-copy">Loading the schedule…</p></div></section>
+    </div>
+    <p class="source-note">These are the same records used by Jamie’s lookup tool. Expand a record’s matching rules to see what the visitor’s words and Jamie’s search must contain. Records are supporting evidence. Every visitor, including Alex, needs employee approval.</p>
+    <section class="review-section" id="review" aria-labelledby="review-heading">
+      <div class="review-heading"><div><p class="eyebrow">FOLLOW THE DECISION</p><h2 id="review-heading">Latest call review</h2></div><span id="review-status" class="review-status" role="status">Waiting for a call</span></div>
+      <p class="review-copy">Updates during a call. The latest review stays here until the next call or server restart. Shows up to 100 actions and the last 30 conversation messages.</p>
+      <div class="review-grid"><section class="audit-panel" aria-label="Decision evidence"><div class="audit-panel-heading"><h3>Lookups & actions</h3><span id="action-count">0 ACTIONS</span></div><ol id="audit-actions" class="audit-actions"><li class="review-empty"><span aria-hidden="true">↗</span><h3>No decisions yet.</h3><p>Call Jamie from the Intercom page. Searches, matched records and door requests will appear here.</p><a href="/" target="_blank" rel="noopener">Open intercom in a new tab ↗</a></li></ol></section><section class="audit-panel conversation-panel" aria-label="Call transcript"><div class="audit-panel-heading"><h3>What was said</h3><span id="call-phase">NOT STARTED</span></div><div id="review-transcript" class="review-transcript"><p class="transcript-placeholder">The visitor’s words and Jamie’s replies will appear here.</p></div><div id="review-state" class="review-state">Door closed · Elevator on 5</div></section></div>
+      <p class="review-footnote">A lookup with no matches is not a final refusal: Jamie may ask for more details. “Entry granted” means the backend accepted an unlock request. Door and elevator actions are simulated.</p>
+    </section>
+    <footer><span><i class="prototype-dot"></i>LOCAL PROTOTYPE</span><p>Read-only mock inbox & calendar · No real accounts connected</p></footer>
+  </main>
+  <script type="module" src="/admin.js"></script>
+  <script type="module" src="/employee.js"></script>
+</body>
+</html>

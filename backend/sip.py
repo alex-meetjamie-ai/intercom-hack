@@ -71,7 +71,7 @@ class Call:
         self.tag = secrets.token_hex(10)
         self.pc = RTCPeerConnection(RTCConfiguration(iceServers=[]))
         self.output = AgentAudio()
-        self.visitor = Visitor(app.door)
+        self.visitor = Visitor(app.door, app.elevator, app.action, app.approvals)
         self.agent = app.agent_factory(self.visitor, self.output, app.transcript)
         self.tasks = set()
         self.closing = False
@@ -138,15 +138,24 @@ class Call:
                 await self.close(send_bye=True)
 
     async def watch(self):
+        signals = []
         try:
             await asyncio.wait_for(self.acked.wait(), 10)
-            await asyncio.wait_for(self.agent.closed.wait(), 180)
-            if not self.closing:
+            signals = [asyncio.create_task(self.agent.closed.wait()),
+                       asyncio.create_task(self.visitor.admission.wait())]
+            done, _ = await asyncio.wait(signals, timeout=180, return_when=asyncio.FIRST_COMPLETED)
+            if self.visitor.admission.is_set() and not self.closing:
+                # Dispatch locally before BYE: no extra model turn or farewell.
+                await self.visitor.tool('auto-elevator-' + self.id, 'send_elevator', {'floor': '0'})
+            elif done and not self.closing:
                 self.app.error = self.agent.error or 'The conversation ended.'
         except asyncio.TimeoutError:
             if not self.acked.is_set():
                 self.app.error = 'The browser did not complete the call.'
         finally:
+            for signal in signals:
+                signal.cancel()
+            await asyncio.gather(*signals, return_exceptions=True)
             await self.close(send_bye=True)
 
     async def bye(self):
@@ -211,6 +220,7 @@ async def handle(app, ws, message):
             return
         app.error = None
         app.messages.clear()
+        app.actions.clear()
         app.door.close()
         app.phase = 'ringing'
         app.call = call = Call(app, ws, message)

@@ -11,7 +11,7 @@ const specs = {
   media: ['audio', 'WebRTC / SRTP', 'two-way audio', true],
   cloud: ['audio', 'PCM / WebSocket', '16 kHz · secure WSS', true],
   tool: ['control', 'open_door tool', 'request + result', true],
-  unlock: ['control', 'Check name', 'Alex → open', false],
+  unlock: ['control', 'Check entry', 'name or arrival', false],
   status: ['state', 'Door status', 'HTTP · every 0.5 sec', false],
 };
 function element(name, attrs = {}) {
@@ -81,8 +81,8 @@ function render() {
     {b:'A visitor presses Jamie.', s:'Accepting the SIP call…', a:'Ready to answer.', active:['sip'], nodes:['browser','backend'], caption:'SIP starts the call. Audio uses a separate WebRTC connection.'},
     {b:'You hear Jamie through your speaker.', s:'Returning Jamie’s voice to the browser.', a:'“Hi, this is Jamie. What is your name?”', active:['media','cloud'], nodes:['backend','agent'], caption:'ElevenLabs generates Jamie’s greeting. The backend sends the voice back to your browser.'},
     {b:`“My name is ${visitor}.”`, s:'Turning microphone audio into 16 kHz PCM.', a:`Listening: “My name is ${visitor}.”`, active:['media','cloud'], nodes:['browser','backend','agent'], caption:'Your microphone audio goes to the backend, then streams to ElevenLabs over a secure WebSocket.'},
-    {b:'Waiting for Jamie’s answer…', s:alex?'Checking: the visitor said Alex.': 'No unlock command requested.', a:alex?'open_door({ name: "Alex" })':'“Sorry, Bob. I can’t let you in.”', active:alex?['tool']:['cloud','media'], nodes:['agent','backend'], caption:alex?'The agent requests open_door. The backend checks the stated name before accepting the command.':'Bob is not admitted. Jamie replies with a refusal and does not call the door tool.'},
-    {b:alex?'The door indicator turns green.':'The door indicator stays closed.', s:alex?'Name accepted → simulated door opens.':'Door remains closed.', a:alex?'“Thanks, Alex. The door is open.”':'Access refused.', active:alex?['unlock','status','cloud','media']:['status'], nodes:alex?['backend','door']:['door'], caption:alex?'The backend opens its simulated door. The website polls the status every half-second and updates the label.':'No door command was sent. The website continues to show “Door closed”.'},
+    {b:'Waiting for Jamie’s answer…', s:'Employee notification → waiting for Allow / Deny.', a:'“Please wait while a colleague confirms.”', active:alex?['tool']:['cloud','media'], nodes:['agent','backend'], caption:alex?'The agent requests open_door. Admin receives a WebSocket notification. The backend waits for the employee to press Allow.':'Admin receives the visitor details over WebSocket. In this example the employee presses Deny; a missing match alone never makes that decision.'},
+    {b:alex?'The door indicator turns green.':'The door indicator stays closed.', s:alex?'Employee pressed Allow → simulated door opens.':'Door remains closed.', a:alex?'“Thanks, Alex. The door is open.”':'Access refused.', active:alex?['unlock','status','cloud','media']:['status'], nodes:alex?['backend','door']:['door'], caption:alex?'After employee confirmation, the backend opens its simulated door and returns success to Jamie.':'The employee denied the request. The website continues to show “Door closed”.'},
     {b:'The door indicator shows closed.', s:alex?'Five seconds later → close the door.':'Ready for the next visitor.', a:'Conversation can continue.', active:['status'], nodes:['backend','door'], caption:alex?'After five seconds, the simulated door closes. Ending the call also closes it.':'The simulated door stayed closed throughout Bob’s visit.'},
   ];
   const current = stages[step];
@@ -93,8 +93,8 @@ function render() {
   $('door-node').classList.toggle('door-open', open);
   $('browser-door').classList.toggle('open', open); $('browser-door').textContent=open?'Door open':'Door closed';
   $('diagram-door-title').textContent=open?'Door open':'Door closed'; $('simulation-badge').textContent=open?'OPEN':'CLOSED';
-  $('diagram-door-detail').textContent=open?'Alex is admitted. Closes in 5 seconds.': !alex && step>=3?'Bob is not on the allowed list.':'Only a visitor named Alex is admitted.';
-  $('door-policy').textContent=open?'✓ Stated name: Alex':!alex&&step>=3?'No unlock requested':'Backend checks the stated name';
+  $('diagram-door-detail').textContent=open?'Alex is admitted. Closes in 5 seconds.': !alex && step>=3?'An employee denied Bob in this example.':'Every visitor needs employee approval.';
+  $('door-policy').textContent=open?'✓ Employee pressed Allow':!alex&&step>=3?'Employee pressed Deny':'Waiting for employee confirmation';
   for(const [id,edge] of Object.entries(edges)){edge.lit=current.active.includes(id);edge.group.classList.toggle('lit',edge.lit);}
   for(const id of ['browser','backend','agent','door']) $(id+'-node').classList.toggle('node-active',current.nodes.includes(id));
   document.querySelectorAll('[data-step]').forEach(el=>{if(Number(el.dataset.step)===step)el.setAttribute('aria-current','step');else el.removeAttribute('aria-current');});
@@ -228,7 +228,7 @@ function buildFullSystem() {
       ${text(410,808,'ELEVENLABS CLOUD','sys-kicker')}${text(410,843,'Jamie, the agent','sys-title')}
       ${text(410,883,'“Hello! What is your name?”','sys-copy','id="full-agent-speech"')}
       ${text(410,920,'Speech → decision → spoken reply')}
-      ${text(410,947,'open_door(name) → backend check')}
+      ${text(410,947,'open_door → employee confirmation')}
       ${text(410,977,'Internet required for this agent','sys-small')}
     </g>
     <g id="full-pi">${box(850,735,510,300,'dark planned')}
@@ -240,7 +240,7 @@ function buildFullSystem() {
       ${text(888,891,'Receive ring / audio · send answer / hangup / unlock','sys-small sys-muted-white')}
       <rect x="872" y="914" width="466" height="54" rx="6" class="sys-module"/>
       ${text(888,936,'Voice backend · SIP / WebRTC ↔ PCM','sys-copy sys-white')}
-      ${text(888,956,'Name policy + tool handler · emulator integration pending','sys-small sys-muted-white')}
+      ${text(888,956,'Arrival lookup + door/lift tools · emulator integration pending','sys-small sys-muted-white')}
       <circle cx="883" cy="995" r="5" id="full-door-dot" class="sys-indicator"/>
       ${text(897,999,'Demo: closed · real door position unknown','sys-copy sys-white','id="full-door-state"')}
       ${text(875,1023,'Ethernet for updates · own PSU · no direct SKS-to-GPIO wiring','sys-small sys-muted-white')}
@@ -323,12 +323,12 @@ function buildFullSystem() {
         'Planned: a visitor rings the unchanged SKS entrance. A parallel a+/b− adapter would report the call over Wi-Fi → LAN → Ethernet → Pi. The orange gap is the unverified SKS/Doorman interface.',
         'Planned: the Pi bridges Jamie’s greeting from ElevenLabs back through Doorman to the visitor. The existing indoor station keeps its own connections.',
         `Planned: “My name is ${name}” travels back over the SKS audio bus, Doorman and the Pi, then streams to ElevenLabs. Browser ↔ backend ↔ agent audio already works on the Mac.`,
-        isAlex?'Jamie requests open_door(name: Alex). The backend checks the stated name. This is a demo rule, not identity verification.':'Jamie refuses Bob and sends no unlock command. The original indoor station can still be used independently.',
+        isAlex?'Jamie requests open_door(name: Alex). Admin receives a WebSocket notification and the backend waits for employee confirmation.':'Admin receives Bob’s details over WebSocket. In this example the employee denies him; the original indoor station remains independent.',
         isAlex?'Planned hardware path: backend → SKS driver → Doorman transmit → a+/b− → building door controller. Today only the simulated door opens; E+/E− are never used for unlocking.':'Bob is refused. No bus unlock command is sent. The website’s simulated door remains closed.',
         'The demo resets after five seconds. A physical unlock command would not tell us whether the door leaf is open or closed; that needs a separate door-position signal.',
       ];
       if(view==='system')$('step-caption').textContent=captions[index];
-      $('full-agent-speech').textContent=index===2?`“My name is ${name}.”`:index>=3?(isAlex?'“Thanks, Alex.”':'“Sorry, Bob.”'):'“Hello! What is your name?”';
+      $('full-agent-speech').textContent=index===2?`“My name is ${name}.”`:index===3?'“Waiting for a colleague.”':index>=4?(isAlex?'“Thanks, Alex.”':'“Sorry, Bob.”'):'“Hello! What is your name?”';
       const open=isAlex&&index===4;
       $('full-door-state').textContent=open?'Demo: open · physical unlock not connected':'Demo: closed · real door position unknown';
       $('full-door-dot').classList.toggle('open',open);
