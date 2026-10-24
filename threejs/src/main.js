@@ -38,6 +38,7 @@ function start(){
   sun.target.position.set(0,7,-3);scene.add(sun,sun.target);
   const fill=new THREE.DirectionalLight(0xdeeee5,1.3);fill.position.set(20,25,-18);scene.add(fill);
   const world=createWorld();scene.add(world.group);
+  const blackout=document.createElement('div');blackout.className='finale-blackout';blackout.setAttribute('aria-hidden','true');$('app').append(blackout);
   const demoStatus=createDemoStatus({onStop:()=>stopDemo(),onDecision:choice=>chooseOnPhone(choice)});
   // One fixed ground plane keeps shadows spatially consistent during travel.
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(250,250),new THREE.ShadowMaterial({color:0x646d54,opacity:.11}));
@@ -47,7 +48,7 @@ function start(){
   let toastTimer,denied=false,freeOrbit=false,playhead=stops[0].duration*.32,decisionAnimation=null;
   let callStatus='idle',interactionStarted=false;
   let backendState=null,activeApproval=null,accepted=false,pendingRequest=false;
-  let playback=null,returnAt=null,raptorCallStarted=false,raptorCallVersion=0;
+  let playback=null,returnAt=null,raptorCallStarted=false,raptorCallVersion=0,raptorCallAt=0,raptorDenied=false,raptorBiteStart=null;
   let state=sampleJourney(0,.32),canonical=journeyFrame(0,.32,aspect);
 
   function applyFrame(frame){
@@ -81,7 +82,7 @@ function start(){
   }
   const client=createIntercomClient({baseUrl:import.meta.env.VITE_API_BASE_URL||'',audio:$('remote-audio'),onError:showApiError,
     onAudioBlocked:blocked=>{$('play-audio').hidden=!blocked;},
-    onApproval:request=>{activeApproval=request;demoStatus.updateApproval(request);},
+    onApproval:request=>{if(current===10&&request?.status==='denied')raptorDenied=true;activeApproval=request;demoStatus.updateApproval(request);},
     onEvent:event=>demoStatus.event(event.kind,event.title,event.detail,event.state),
     onState:state=>{
       callStatus=state;demoStatus.setCall(state);updateUI();
@@ -89,14 +90,15 @@ function start(){
       if(interactionStarted)pendingRequest=true;
     },onStatus:status=>{
       backendState=status;demoStatus.updateBackend(status);
-      const message=status.transcript?.at(-1);
+      if(current===10&&raptorCallAt&&status.actions?.some(action=>Date.parse(action.at)>=raptorCallAt&&action.tool==='deny_entry'&&action.ok))raptorDenied=true;
+      const message=interactionStarted?status.transcript?.at(-1):null;
       $('live-transcript').textContent=message?`${message.speaker}: ${message.text}`:'';
       $('live-transcript').hidden=!message;
 
     },
   });
   async function startRaptorCall(){
-    raptorCallStarted=true;
+    raptorCallStarted=true;raptorCallAt=Date.now();raptorDenied=false;raptorBiteStart=null;
     const version=++raptorCallVersion;
     interactionStarted=true;pendingRequest=false;activeApproval=null;
     try{
@@ -148,7 +150,8 @@ function start(){
     decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
   function stopDemo(){
-    raptorCallVersion++;raptorCallStarted=false;
+    demoStatus.resetConversation();$('live-transcript').hidden=true;
+    raptorCallVersion++;raptorCallStarted=false;raptorCallAt=0;raptorDenied=false;raptorBiteStart=null;
     interactionStarted=false;accepted=false;pendingRequest=false;denied=false;
     decisionAnimation=null;playback=null;returnAt=null;busy=false;current=0;
     playhead=stops[0].duration*.32;freeOrbit=false;controls.enabled=true;
@@ -252,7 +255,12 @@ function start(){
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor(),callStatus};
     if(!review&&cursor.index===10&&cursor.progress>=.86&&!raptorCallStarted)startRaptorCall();
-    if(!review&&current===10)state.streetDoor=backendState?.door==='open'?1:0;
+    if(!review&&current===10){
+      state.streetDoor=backendState?.door==='open'?1:0;
+      if(raptorDenied&&callStatus==='idle'&&raptorBiteStart===null)raptorBiteStart=now;
+      state.raptorFinale=raptorBiteStart===null?0:(now-raptorBiteStart)/1000;
+      state.raptorBite=Math.min(1,state.raptorFinale/3.4);
+    }
     if(!review&&!accepted&&current<=1)state.streetDoor=0;
     if(!interactionStarted&&!review&&current===0){state.intercomReach=0;state.intercomPress=0;state.ring=0;}
     if(denied&&current===1)state.phoneChoice='no';
@@ -270,6 +278,30 @@ function start(){
       state={...state,facade:1,leftWing:1,greet:0};
       camera.up.set(0,0,1);
       applyFrame({position:[0,80,0],target:[0,0,0],size:49});
+    }
+    const finale=state.raptorFinale||0;
+    if(finale>3.4&&state.raptor){
+      const turn=phase(finale,3.4,4.35),approach=phase(finale,4.25,6.35);
+      const dx=camera.position.x-state.raptor[0],dz=camera.position.z-state.raptor[2],length=Math.hypot(dx,dz);
+      const angle=Math.atan2(dx,dz);
+      state.raptorYaw+=Math.atan2(Math.sin(angle-state.raptorYaw),Math.cos(angle-state.raptorYaw))*turn;
+      state.raptor=[state.raptor[0]+dx/length*approach*1.4,0,state.raptor[2]+dz/length*approach*1.4];
+      state.raptorWalking=approach>0&&approach<.8;
+      state.viewerBite=phase(finale,4.8,5.8)*(1-phase(finale,6.35,6.58));
+      const faceTarget=[state.raptor[0]+Math.sin(angle)*.62,1.92-.08*phase(finale,5.8,6.6),state.raptor[2]+Math.cos(angle)*.62];
+      const faceFrame={target:faceTarget,position:[faceTarget[0]+Math.sin(angle)*80,faceTarget[1]+2,faceTarget[2]+Math.cos(angle)*80],size:6.3-5.12*phase(finale,4.2,6.05)-.88*phase(finale,6.05,6.6)};
+      applyFrame(blendFrames(canonical,faceFrame,phase(finale,3.9,4.9)));
+      controls.enabled=false;
+    }
+    $('app').classList.toggle('raptor-attack',finale>4.4);
+    const darkness=phase(finale,6.48,6.72);
+    blackout.style.opacity=String(darkness);
+    $('app').classList.toggle('raptor-blackout',darkness>0);
+    $('app').classList.toggle('raptor-ended',darkness>=.999);
+    if(finale>1.55&&finale<1.9&&!reducedMotion.matches){
+      const shake=(1-(finale-1.55)/.35)*.08;
+      camera.position.x+=Math.sin(finale*110)*shake;
+      camera.position.y+=Math.cos(finale*97)*shake;
     }
     ground.position.y=-.67;ground.material.opacity=.1;
     world.update({...state,visitorRequest:activeApproval},review?1:elapsed,camera);world.updateView(camera);

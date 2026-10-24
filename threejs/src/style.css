@@ -68,3 +68,11 @@
 .presentation-phone .admin-decisions{grid-template-columns:1fr 1fr;gap:10px;margin:15px 0 21px}.presentation-phone .admin-decisions button{font-size:20px;padding:13px 8px}.presentation-phone .admin-decisions button[data-decision="no"]{background:#e8d7d0;border-color:#d2bcb1;color:#633d30}.presentation-phone .admin-decisions button[data-decision="yes"]{background:#2e6042;color:#fff}.presentation-phone .admin-decisions button:disabled{opacity:.4}
 .phone-home{height:4px;width:82px;background:#839084;border-radius:4px;margin:auto}
 @media(max-width:700px){.presentation-sidebar{right:14px;top:14px;width:310px;max-height:calc(100dvh - 28px)}.presentation-phone{width:250px;padding:12px 15px 16px}.phone-owner{margin-bottom:12px}.phone-speaker{margin-bottom:12px}.presentation-sidebar.has-phone .demo-status{max-height:calc(100dvh - 375px)}}
+
+.finale-blackout{position:fixed;inset:0;background:#000;opacity:0;z-index:90;pointer-events:none}.raptor-blackout .demo-shortcuts{z-index:95}.raptor-blackout .demo-shortcuts a{display:none}.raptor-blackout .demo-shortcuts button{background:#171b18;border-color:#ffffff35;color:#d6ded7;padding:9px 13px;font-size:13px}.raptor-blackout .demo-shortcuts [data-control-label]{font-size:13px}
+
+.raptor-blackout .finale-blackout{pointer-events:auto}
+
+.raptor-ended>:not(.finale-blackout):not(.demo-shortcuts){visibility:hidden}
+
+.raptor-attack .presentation-sidebar,.raptor-attack .demo-shortcuts a{visibility:hidden}

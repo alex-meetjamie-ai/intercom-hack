@@ -199,7 +199,8 @@ export function createRaptor(parent){
   const head=group(body,'Raptor head',[0,2.03,.42]);
   ball(head,.31,[0,.08,0],green,[1.05,.92,1.05]);
   box(head,[.50,.27,.57],[0,-.01,.32],green,.10);
-  box(head,[.43,.085,.51],[0,-.19,.31],light,.025);
+  const jaw=group(head,'Lower jaw',[0,-.13,.02]);
+  box(jaw,[.43,.085,.51],[0,-.06,.29],light,.025);
   box(head,[.46,.023,.44],[0,-.125,.34],dark,.008);
   for(const side of [-1,1]){
     ball(head,.123,[side*.285,.16,.15],'#dfb950',[.43,1,1]);
@@ -244,12 +245,30 @@ export function createRaptor(parent){
   const hand=makeHand(1),other=makeHand(-1);other.position.set(-.42,1.29,.57);
   limb(body,[-.33,1.57,.23],[-.49,1.35,.39],.072);
   limb(body,[-.49,1.35,.39],[-.42,1.29,.57],.055);
-  function update({position,yaw,walking,press,time=0}){
+  const mouthInterior=box(head,[.40,.59,.22],[0,-.37,.31],'#241717',.06);mouthInterior.visible=false;
+  const tongue=box(jaw,[.27,.025,.28],[0,-.007,.34],'#bc7777',.02);
+  for(const x of [-.16,-.08,0,.08,.16]){
+    const tooth=cylinder(jaw,.027,.085,[x,.045,.50],claw,0);
+  }
+  const mouth=group(head,'Bite point',[0,-.11,.57]);
+  function update({position,yaw,walking,press,bite=0,viewerBite=0,scale=1,time=0}){
     root.visible=Boolean(position);if(!position)return;
-    root.position.fromArray(position);root.rotation.y=yaw;
+    root.position.fromArray(position);root.rotation.y=yaw;root.scale.setScalar(scale);
     body.position.y=walking?Math.abs(Math.sin(time*9))*.05:Math.sin(time*2)*.012;
     legs.forEach((leg,i)=>leg.rotation.x=walking?Math.sin(time*9+i*Math.PI)*.36:0);
     tail.rotation.y=Math.sin(time*2)*.07;head.rotation.z=Math.sin(time*1.7)*.025;
+    const ease=(a,b)=>{const t=Math.max(0,Math.min(1,(bite-a)/(b-a)));return t*t*(3-2*t);};
+    const lunge=ease(.08,.36)*(1-ease(.48,.7));
+    body.position.x=.20*lunge;
+    head.position.set(.24*lunge,2.03-.22*lunge,.42+.02*lunge-.22*ease(.48,.72));
+    head.rotation.x=.08*lunge+Math.sin(bite*45)*.04*ease(.58,.7)*(1-ease(.88,1));
+    jaw.rotation.x=.65*ease(.05,.25)*(1-ease(.35,.47)) + Math.max(0,Math.sin(bite*55))*.22*ease(.6,.7)*(1-ease(.9,1));
+    if(viewerBite>0){
+      head.rotation.z=0;head.rotation.x=-.05*viewerBite;
+      jaw.rotation.x=Math.max(jaw.rotation.x,1.1*viewerBite);
+    }
+    mouthInterior.visible=viewerBite>.1;
+    if(bite>0)press*=1-ease(0,.15);
     root.updateWorldMatrix(true,true);
     const shoulder=new THREE.Vector3(.34,1.58,.24),rest=new THREE.Vector3(.44,1.24,.60);
     const touch=body.worldToLocal(new THREE.Vector3(2.5,1.7,10.874));touch.z-=.17;
@@ -257,5 +276,5 @@ export function createRaptor(parent){
     const elbow=shoulder.clone().lerp(target,.5).add(new THREE.Vector3(.18,-.1,0));
     bone(upper,shoulder,elbow);bone(lower,elbow,target);hand.position.copy(target);
   }
-  return {root,update};
+  return {root,update,mouth};
 }

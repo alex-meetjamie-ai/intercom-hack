@@ -10,7 +10,7 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
   phone.setAttribute('aria-label',"Egor's phone");
   phone.innerHTML='<div class="phone-speaker" aria-hidden="true"></div><div class="phone-owner">EGOR’S PHONE</div><div class="phone-notification"><span class="phone-app">JAMIE · INTERCOM</span><h2 data-visitor>Visitor at the door</h2><p data-visit-detail>Entry request</p><span data-approval-state hidden></span></div><div class="admin-decisions"><button type="button" data-decision="no">No</button><button type="button" data-decision="yes">Yes</button></div><div class="phone-home" aria-hidden="true"></div>';
   stack.append(phone);
-  let index=0,connection='idle',running=false,approval=null,lastRequest=null,transitioning=false,phoneScene=false;
+  let index=0,connection='idle',running=false,approval=null,lastRequest=null,transitioning=false,phoneScene=false,conversationStarted=false;
   const stop=panel.querySelector('.demo-stop');
   stop.classList.add('emergency-stop');
   const links=document.createElement('nav');links.className='demo-shortcuts';links.setAttribute('aria-label','Demo controls and pages');
@@ -66,11 +66,21 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
     const action=state.actions?.at(-1);
     const names={check_calendar_emails:'Checking email & calendar',employee_approval:'Waiting for your approval',employee_decision:'Decision sent to Jamie',open_door:'Opening the door',send_elevator:'Sending the elevator',elevator_auto_return:'Elevator returning to office'};
     panel.querySelector('[data-action]').textContent=action?(action.ok?names[action.tool]||action.text:action.text):'Waiting for a call';
-    const message=state.transcript?.at(-1);
+    const message=conversationStarted?state.transcript?.at(-1):null;
     panel.querySelector('.admin-conversation').hidden=!message;
     panel.querySelector('[data-speaker]').textContent=message?.speaker==='You'?'VISITOR':message?.speaker||'';
     panel.querySelector('[data-words]').textContent=message?.text||'';
   }
-  function setCall(state){connection=state;render();}
-  render();return {event,updateFrame,updateBackend,updateApproval,setCall};
+  function resetConversation(){
+    conversationStarted=false;
+    panel.querySelector('.admin-conversation').hidden=true;
+    panel.querySelector('[data-speaker]').textContent='';
+    panel.querySelector('[data-words]').textContent='';
+  }
+  function setCall(state){
+    if(state==='connecting')resetConversation();
+    if(state==='connected')conversationStarted=true;
+    connection=state;render();
+  }
+  render();return {event,updateFrame,updateBackend,updateApproval,setCall,resetConversation};
 }
