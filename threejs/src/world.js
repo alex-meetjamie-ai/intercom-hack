@@ -136,7 +136,7 @@ function buildStreet(parent) {
   for(let y=.06;y<=.26;y+=.05)box(plaque,[.38,.016,.012],[0,y,.085],'charcoal',0);
   const bell=box(plaque,[.50,.19,.08],[0,-.10,.11],bellMaterial,.03);bell.name='Intercom button';
   const jamieLabels={};
-  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Cancel',connected:'End call',disconnecting:'Ending…',offline:'Jamie'})){
+  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Cancel',connected:'End call',disconnecting:'Ending…',offline:'Jamie',denied:'Denied'})){
     jamieLabels[key]=label(plaque,text,.45,.125,[0,-.10,.17],{background:'#355648',color:'#ffffff',size:.61});
     jamieLabels[key].visible=key==='idle';
   }
@@ -508,14 +508,16 @@ export function createWorld() {
   function update(s,time=0,camera) {
     state=s;
     lift.dispatch.visible=s.stage===3&&s.liftCalled>.15&&s.liftY>.1;
-    for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.callStatus||'idle');
+    for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.deniedGlow?'denied':s.callStatus||'idle');
     const p={street:1,courtyard:1,loft:1,terrace:1,shaft:1,lowerShaft:1,...s.presentation};
     for (const name of ['street','courtyard','loft','terrace','shaft']) fades[name](p[name],s);
     for(const {pivot,side} of street.leaves) pivot.rotation.y=-side*s.streetDoor*1.4;
     ringMaterial.opacity=.8*p.street*(s.facade??1);
     ringGroup.visible=s.ring>.1&&ringMaterial.opacity>.003&&!(s.raptorBite>.47);
     rings.forEach((ring,i)=>{const t=(time*.8+i/3)%1;ring.scale.setScalar(.65+t*.8);});
-    street.bell.material.color.set(s.approved||s.intercomPress>.4 ? '#8db496':'#c3c5b7');
+    street.bell.material.color.set(s.deniedGlow?'#d9644f':s.approved||s.intercomPress>.4 ? '#8db496':'#c3c5b7');
+    street.bell.material.emissive.set(s.deniedGlow?'#a52a1d':'#000000');
+    street.bell.material.emissiveIntensity=s.deniedGlow?.45+.25*Math.sin(time*5):0;
     street.bell.position.z=.12-.018*(s.intercomPress||0);
     lift.callButton.position.x=.12-.018*(s.liftPress||0);
     lift.callButton.material.color.set(s.liftCalled>.5?'#eac275':'#b7c6b8');

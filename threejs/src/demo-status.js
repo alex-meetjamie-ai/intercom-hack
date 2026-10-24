@@ -1,6 +1,6 @@
 import {stops} from './journey.js';
 
-export function createDemoStatus({onStop=()=>{},onDecision=()=>{},onRaptor=()=>{}}={}){
+export function createDemoStatus({onStop=()=>{},onDecision=()=>{},onRaptor=()=>{},onSound=()=>true}={}){
   const panel=document.createElement('aside');panel.className='demo-status';
   panel.innerHTML='<div class="admin-kicker">JAMIE · LIVE ADMIN</div><div class="demo-body"><div class="admin-state"><div><span>Door</span><strong data-door>Closed</strong></div><div><span>Elevator</span><strong data-lift>Floor 5</strong></div></div><section class="admin-activity"><span class="admin-label">LATEST ACTION</span><p data-action>Waiting for a call</p></section><section class="admin-conversation" hidden><span class="admin-label" data-speaker></span><p data-words></p></section><button type="button" class="demo-stop" aria-label="Stop demo and call"><span aria-hidden="true" data-control-icon>■</span><span data-control-label>Stop</span></button></div>';
   panel.setAttribute('aria-label','Presentation status');document.getElementById('app').append(panel);
@@ -18,6 +18,8 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{},onRaptor=()=>{
   const raptorShortcut=document.createElement('button');raptorShortcut.type='button';raptorShortcut.className='raptor-shortcut';
   raptorShortcut.textContent='★';raptorShortcut.title='Restart raptor scene';raptorShortcut.setAttribute('aria-label','Restart raptor scene');
   raptorShortcut.addEventListener('click',onRaptor);links.append(raptorShortcut);
+  const sound=document.createElement('button');sound.type='button';sound.className='ambience-toggle';sound.textContent='♫';sound.title='Mute ambience';sound.setAttribute('aria-label','Mute ambience');sound.setAttribute('aria-pressed','true');
+  sound.addEventListener('click',()=>{const enabled=onSound();sound.textContent=enabled?'♫':'♪';sound.setAttribute('aria-pressed',String(enabled));sound.title=enabled?'Mute ambience':'Enable ambience';sound.setAttribute('aria-label',sound.title);});links.append(sound);
   const pages=document.createElement('nav');pages.className='demo-pages';pages.setAttribute('aria-label','Related pages');
   for(const [name,path] of [['Intercom','/'],['How it works','/how-it-works'],['Admin','/admin']]){
     const link=document.createElement('a');

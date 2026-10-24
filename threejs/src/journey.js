@@ -41,7 +41,7 @@ export function sampleJourney(index, progress) {
   }
   if (index >= 1) s.ring = index === 1 ? 1 - phase(p, 0, .15) : 0;
   if (index === 1) { s.phone = phase(p, .50, .74); s.notification = phase(p, .68, .86); s.facade=1-.94*phase(p,.08,.4); }
-  if (index === 2) { s.approved = 1; s.phone=1-phase(p,0,.18); s.notification=1-phase(p,0,.18); s.streetDoor = phase(p, .65, .96); s.facade=.06+.94*phase(p,.5,.82); }
+  if (index === 2) { s.approved = 1; s.phone=1-phase(p,0,.18); s.notification=1-phase(p,0,.18); s.streetDoor = phase(p, .65, .96); s.facade=.06+.94*phase(p,.5,.82); s.liftCalled=phase(p,.65,.70); s.liftY=TOP*(1-.25*phase(p,.65,1)); }
   if (index >= 4) s.liftCalled=1;
   if (index >= 3) { s.approved = 1; s.streetDoor = 1; s.facade = index === 3 ? 1 - .94*phase(p, .04, .27) : .06; }
   if (index === 3) {
@@ -51,9 +51,9 @@ export function sampleJourney(index, progress) {
     s.walking = p > .1 && p < .64;
     s.liftReach=0;
     s.liftPress=0;
-    s.liftCalled=phase(p,.66,.70);
-    s.liftY = TOP * (1 - phase(p, .72, .96));
-    s.liftDoor = phase(p, .96, 1);
+    s.liftCalled=1;
+    s.liftY=TOP*.75*(1-phase(p,0,.42));
+    s.liftDoor=phase(p,.42,.50);
   }
   if (index === 4) {
     const enter = walkingRoute([WAITING, CABIN], phase(p, .03, .2));
@@ -86,6 +86,8 @@ export function sampleJourney(index, progress) {
       s.liftY=TOP*(1-phase(p,.08,.88));s.visitor=[CABIN[0],s.liftY,CABIN[2]];s.visitorYaw=Math.PI/2;
       s.liftDoor=phase(p,.90,1);
     }else if(index===8){
+      // The camera has already returned to the street; omit the compressed off-camera walk.
+      s.courierGone=true;
       const walk=walkingRoute([CABIN,WAITING,[0,0,LIFT_POSITION[2]],[0,0,8],[0,0,12.3],STREET,[9,0,13.3]],phase(p,.06,.94));
       s.visitor=walk.position;s.visitorYaw=walk.yaw;s.walking=p>.06&&p<.94;s.liftY=0;
       s.liftDoor=1-phase(p,.12,.25);
@@ -155,7 +157,7 @@ export const stops = [
     duration: 5200,
     nextLabel: 'Take it again',
   },
-  {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:2000},
+  {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:3500},
   {id:'return-down',title:'Back to the courtyard.',duration:1000},
   {id:'return-to-street',title:'On to the next delivery.',duration:1200},
   {id:'surprise-notification',title:'Wait… another visitor?',duration:1},
