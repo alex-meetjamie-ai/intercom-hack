@@ -43,7 +43,7 @@ export function blendFrames(a,b,t){
   return {target,position:add(target,scale(facing,DISTANCE)),size:mix(a.size,b.size,t),bounds:b.bounds};
 }
 function entrance(aspect){return shot([0,5.6,11.2],26,aspect,streetBounds);}
-function intercom(aspect){return shot([2.05,1.75,11.1],4.4,aspect,around([1.7,1.85,11.15],3),[-.6,.25,1]);}
+function intercom(aspect){return shot([2.5,1.75,11.2],4.4,aspect,around([2.5,1.85,11.2],3),[-.6,.25,1]);}
 function liftClose(state,aspect){const target=add(state.visitor,[0,2.8,-1.3]);return shot(target,8,aspect,around(target,4.5),[1,.38,1]);}
 function liftButton(aspect){return shot([-6.7,1.7,-6.25],5.6,aspect,around(LIFT_CALL_BUTTON,3),[1,.48,1]);}
 function phoneClose(state,aspect){
@@ -64,6 +64,13 @@ function officeFlight(p,aspect){
 // rather than finishing a separate scene transition before he starts moving.
 export function journeyFrame(index,progress,aspect=1.5){
   const p=Math.max(0,Math.min(1,progress)),state=sampleJourney(index,p);
+  if(index>=6){
+    const target=add(state.visitor,[0,2,0]);
+    const follow=shot(target,index===8?14:10,aspect,around(target,5),index===8?direction:[1,.45,1]);
+    if(index===6)return blendFrames(journeyFrame(5,1,aspect),follow,phase(p,0,.35));
+    if(index===7)return blendFrames(journeyFrame(6,1,aspect),follow,phase(p,0,.1));
+    return blendFrames(journeyFrame(7,1,aspect),follow,phase(p,0,.18));
+  }
   if(index===0)return blendFrames(entrance(aspect),intercom(aspect),phase(p,0,.32));
   if(index===1)return blendFrames(officeFlight(phase(p,0,.60),aspect),phoneClose(state,aspect),phase(p,.50,.98));
   if(index===2){

@@ -90,7 +90,7 @@ function buildStreet(parent) {
   for (const y of [4.9, 9.15, 13.65]) box(facade, [22.5, .18, 1.46], [0, y, 10], 'ivory');
   box(facade, [22.8, .23, 1.65], [0, 13.9, 10], 'ivory');
   for (const x of [-9.2, -5.6, -2.7, 2.7, 5.6, 9.2]) {
-    for (const y of [2.65, 6.95, 11.2]) windowUnit(facade, x, y, 10.65, 1.18, y < 4 ? 2.0 : 2.1);
+    for (const y of [2.65, 6.95, 11.2]) windowUnit(facade, x===2.7&&y<4?4:x, y, 10.65, 1.18, y < 4 ? 2.0 : 2.1);
   }
   windowUnit(facade, 0, 7.05, 10.65, 1.23, 2.1);
   windowUnit(facade, 0, 11.2, 10.65, 1.23, 2.1);
@@ -130,13 +130,13 @@ function buildStreet(parent) {
     leaves.push({ pivot, side });
   }
   label(facade, '144', 1.15, .42, [-2.28, 3.9, 10.71], { background: '#eee4cf' });
-  const plaque = group(facade, 'Intercom', [2.04, 1.8, 10.8]);
+  const plaque = group(facade, 'Intercom', [2.5, 1.8, 10.67]);
   box(plaque, [.62, .9, .14], [0, 0, 0], 'steel');
   const bellMaterial = material('#bdc4b4').clone();
   for(let y=.06;y<=.26;y+=.05)box(plaque,[.38,.016,.012],[0,y,.085],'charcoal',0);
   const bell=box(plaque,[.50,.19,.08],[0,-.10,.11],bellMaterial,.03);bell.name='Intercom button';
   const jamieLabels={};
-  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Calling…',connected:'Speak now',offline:'Jamie'})){
+  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Cancel',connected:'End call',disconnecting:'Ending…',offline:'Jamie'})){
     jamieLabels[key]=label(plaque,text,.45,.125,[0,-.10,.17],{background:'#355648',color:'#ffffff',size:.61});
     jamieLabels[key].visible=key==='idle';
   }
@@ -147,14 +147,24 @@ function buildStreet(parent) {
 
 function buildCourtyard(parent) {
   const g = group(parent, 'Courtyard');
-  box(g, [23.5, .36, 29], [0, -.36, 1], 'stone', .1);
-  box(g,[22.5,.08,20.3],[0,-.12,.5],'#8e9287');
-  box(g,[2.6,.08,18.6],[0,-.035,1],'#596264',.02);
-  box(g,[10.6,.08,2.6],[-5.3,-.03,-6.55],'#596264',.02);
+  // Leave a real shaft pit in every paving layer. The moving wooden cabin
+  // floor must never occupy the same surface as the static courtyard paving.
+  function groundSlab(size,position,color){
+    const [width,height,depth]=size,[x,y,z]=position;
+    const left=x-width/2,right=x+width/2,back=z-depth/2,front=z+depth/2;
+    const cut={left:Math.max(left,LIFT_OPENING.left),right:Math.min(right,LIFT_OPENING.right),back:Math.max(back,LIFT_OPENING.back),front:Math.min(front,LIFT_OPENING.front)};
+    if(cut.left>=cut.right||cut.back>=cut.front){box(g,size,position,color,0);return;}
+    for(const [l,r,b,f] of [[left,cut.left,back,front],[cut.right,right,back,front],[cut.left,cut.right,back,cut.back],[cut.left,cut.right,cut.front,front]])
+      if(r-l>.001&&f-b>.001)box(g,[r-l,height,f-b],[(l+r)/2,y,(b+f)/2],color,0);
+  }
+  groundSlab([23.5,.36,29],[0,-.36,1],'stone');
+  groundSlab([22.5,.08,20.3],[0,-.12,.5],'#8e9287');
+  groundSlab([2.6,.08,18.6],[0,-.035,1],'#596264');
+  groundSlab([10.6,.08,2.6],[-5.3,-.03,-6.55],'#596264');
   for(let z=-7.6;z<10.4;z+=.47)for(const x of [-.94,-.47,0,.47,.94])
-    box(g,[.43,.012,.43],[x,-.005,z],'#697172',.01);
+    groundSlab([.43,.012,.43],[x,-.005,z],'#697172');
   for(let x=-10.1;x<0;x+=.47)for(const z of [-7.45,-6.98,-6.51,-6.04,-5.57])
-    box(g,[.43,.012,.43],[x,-.005,z],'#697172',.01);
+    groundSlab([.43,.012,.43],[x,-.005,z],'#697172');
   // Low-poly slate beds and the dark central path from the courtyard photos.
   const rockGeometry=new THREE.IcosahedronGeometry(.34,0);
   let seed=174;const random=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
@@ -284,8 +294,8 @@ function buildLift(parent) {
   for (const [a,b] of [[[-1.3,TOP+3,-1.2],[1.3,TOP+4.05,-1.2]],[[1.3,TOP+3,-1.2],[-1.3,TOP+4.05,-1.2]]]) beam(crown,a,b,.08);
   const cabin = group(shaft,'Elevator cabin');
   // Cabin floor and terrace now meet the character's sole height at a stop.
-  box(cabin,[2.7,.16,2.5],[0,-.12,0],'steel');
-  box(cabin,[2.6,.06,2.4],[0,-.02,0],'wood');
+  box(cabin,[2.7,.16,2.5],[0,-.16,0],'steel');
+  box(cabin,[2.6,.06,2.4],[0,-.03,0],'wood',0);
   box(cabin,[2.7,.16,.14],[0,3.05,-1.2],'charcoal');
   box(cabin,[2.8,.13,2.6],[0,3.25,0],'steel');
 
@@ -458,16 +468,11 @@ export function createWorld() {
   const root=group(null,'Linienstraße 144');
   const courtyard=buildCourtyard(root);
   const street=buildStreet(root),lift=buildLift(root),office=buildLoft(root);
-  const courier=createPerson(root,{name:'Courier',courier:true,shirt:'coral'});
+  const courier=createPerson(root,{name:'Courier',courier:true,shirt:'#ffcc00'});
   const egor=createPerson(root,{name:'Egor',glasses:true,shirt:'teal'});
   const colleague=createPerson(root,{name:'Hello!',shirt:'yellow',position:roomPoint([2.6,0,3.4])});
-  const hello=label(root,'Lunch is here!',2.55,.54,[COURIER_LANDING[0]+.8,TOP+3.9,COURIER_LANDING[2]],{background:'#fcf6e9',color:'#528c80'});
-  const celebration=group(root,'Arrival celebration');
-  const papers=Array.from({length:34},(_,i)=>{
-    const paper=box(celebration,[.07,.12,.012],[0,0,0],['coral','yellow','teal','ivory'][i%4],0);
-    paper.userData={angle:i*2.39996,radius:1.2+(i%7)*.25,height:1+(i%5)*.32};return paper;
-  });
-  const ringGroup=group(root,'Doorbell signal',[2.05,1.7,10.99]);
+  const hello=label(root,'Delivered!',2.55,.54,[COURIER_LANDING[0]+.8,TOP+3.9,COURIER_LANDING[2]],{background:'#fcf6e9',color:'#528c80'});
+  const ringGroup=group(root,'Doorbell signal',[2.5,1.7,10.88]);
   const ringMaterial=new THREE.MeshBasicMaterial({color:'#dc9369',transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false});
   const rings=[.3,.5,.7].map(radius=>{
     const r=new THREE.Mesh(new THREE.RingGeometry(radius,radius+.022,40),ringMaterial);ringGroup.add(r);return r;
@@ -492,12 +497,6 @@ export function createWorld() {
   function update(s,time=0,camera) {
     state=s;
     lift.dispatch.visible=s.stage===3&&s.liftCalled>.15&&s.liftY>.1;
-    celebration.visible=s.greet>.01;
-    for(const paper of papers){
-      const {angle,radius,height}=paper.userData,t=s.greet;
-      paper.position.set(COURIER_LANDING[0]+Math.cos(angle)*radius*t,TOP+.08+height*(1-t)+Math.sin(t*Math.PI)*1.9,COURIER_LANDING[2]+Math.sin(angle)*radius*t);
-      paper.rotation.set(t*5+angle,t*3,t*7+angle);
-    }
     for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.callStatus||'idle');
     const p={street:1,courtyard:1,loft:1,terrace:1,shaft:1,lowerShaft:1,...s.presentation};
     for (const name of ['street','courtyard','loft','terrace','shaft']) fades[name](p[name],s);
@@ -517,8 +516,8 @@ export function createWorld() {
       door.position.x=side*THREE.MathUtils.lerp(closed,open,atLanding?s.liftDoor:0);
     });
     office.door.rotation.y=s.officeDoor*1.15;
-    courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,reachTarget:s.stage===0?INTERCOM_BUTTON:LIFT_CALL_BUTTON,reachNormal:s.stage===0?[0,0,1]:[1,0,0],reachAmount:s.stage===0?s.intercomReach:s.liftReach,showLabel:false,time});
-    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,waving:s.greet>.5,showLabel:false,time});
+    courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,delivered:s.delivered,reachTarget:s.stage===0?INTERCOM_BUTTON:LIFT_CALL_BUTTON,reachNormal:s.stage===0?[0,0,1]:[1,0,0],reachAmount:s.stage===0?s.intercomReach:s.liftReach,showLabel:false,time});
+    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,visitorRequest:s.visitorRequest,waving:s.greet>.5,showLabel:false,time});
     colleague.update({position:roomPoint([2.6,0,3.4]),yaw:-.9+ROOM_ROTATION,waving:s.greet>.3,showLabel:false,time});
     const upstairs=s.visitor[1]>=TOP-.5;
     const courierOpacity=Math.max(p.street,p.courtyard,p.shaft*(upstairs?1:p.lowerShaft),upstairs?p.terrace:0);

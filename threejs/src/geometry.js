@@ -53,6 +53,13 @@ export function label(parent, text, width, height, position, { color = '#304b4d'
   c.fillText(text, canvas.width / 2, canvas.height * .52, canvas.width * .91);
   const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;
   const m = mesh(parent, new THREE.PlaneGeometry(width, height), new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide }), position);
+  m.userData.setText = value => {
+    const next=String(value??'');
+    if(next===text)return;
+    text=next;c.fillStyle=background;c.fillRect(0,0,canvas.width,canvas.height);
+    c.fillStyle=color;c.fillText(text,canvas.width/2,canvas.height*.52,canvas.width*.91);
+    texture.needsUpdate=true;
+  };
   m.castShadow = false; return m;
 }
 export function plant(parent, position, scale = 1, autumn = false) {

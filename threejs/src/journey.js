@@ -1,7 +1,7 @@
 // A deterministic timeline: every stop can be replayed or revisited independently.
 import {TOP,ROOM_ROTATION,roomPoint,officePoint,HOST_LANDING,COURIER_LANDING,LIFT_POSITION} from './layout.js';
 export {TOP} from './layout.js';
-export const STREET = [2.5, 0, 11.55];
+export const STREET = [2.94, 0, 11.65];
 export const WAITING = [LIFT_POSITION[0]+2.7, 0, LIFT_POSITION[2]];
 export const CABIN = [...LIFT_POSITION];
 export const DESK = roomPoint([.15,0,3.8]);
@@ -30,7 +30,7 @@ export function sampleJourney(index, progress) {
   const p = clamp(progress);
   const s = {
     visitor: [...STREET], visitorYaw: Math.PI, walking: false, ring: 0, intercomReach:0, intercomPress:0, liftReach:0, liftPress:0, liftCalled:0,
-    stage:index, focus:['street','office','street','courtyard','lift','terrace'][index],
+    stage:index, focus:['street','office','street','courtyard','lift','terrace','terrace','lift','courtyard'][index],
     egor: [...DESK], egorYaw: .2+ROOM_ROTATION, phone: 0, notification: 0, approved: 0,
     streetDoor: 0, liftY: TOP, liftDoor: 0, officeDoor: 0, greet: 0, facade: 1, leftWing:1,
   };
@@ -76,15 +76,30 @@ export function sampleJourney(index, progress) {
     s.egorWalking = p > .08 && p < .62;
     s.liftDoor = 1; s.officeDoor = phase(p, .07, .25); s.greet = phase(p, .68, .9);
   }
+  if(index>=6){
+    s.egor=[...HOST_LANDING];s.egorYaw=0;s.leftWing=.06;s.officeDoor=1;s.delivered=true;
+    if(index===6){
+      const walk=walkingRoute([COURIER_LANDING,[COURIER_LANDING[0],TOP,CABIN[2]],[-11.1,TOP,CABIN[2]],[CABIN[0],TOP,CABIN[2]]],phase(p,.1,.8));
+      s.visitor=walk.position;s.visitorYaw=walk.yaw;s.walking=p>.1&&p<.8;
+      s.liftDoor=1-phase(p,.84,1);
+    }else if(index===7){
+      s.liftY=TOP*(1-phase(p,.08,.88));s.visitor=[CABIN[0],s.liftY,CABIN[2]];s.visitorYaw=Math.PI/2;
+      s.liftDoor=phase(p,.90,1);
+    }else{
+      const walk=walkingRoute([CABIN,WAITING,[0,0,LIFT_POSITION[2]],[0,0,8],[0,0,12.3],STREET,[9,0,13.3]],phase(p,.06,.94));
+      s.visitor=walk.position;s.visitorYaw=walk.yaw;s.walking=p>.06&&p<.94;s.liftY=0;
+      s.liftDoor=1-phase(p,.12,.25);
+    }
+  }
   return s;
 }
 
 export const stops = [
   {
     id: 'doorbell', category: '01 / LINIENSTRASSE 144', caption: 'AT THE STREET DOOR',
-    title: 'Good things come in pizza boxes.',
+    title: 'A parcel at the door.',
     description: 'Our courier rings the intercom at the street entrance. Someone upstairs gets the message.',
-    hero: ['Pizza’s here.', 'Almost.'], note: 'A little delivery, from the street to our rooftop.',
+    hero: ['DHL is here.', 'Almost.'], note: 'A little delivery, from the street to our rooftop.',
     duration: 3800,
     nextLabel: 'Next',
   },
@@ -108,26 +123,29 @@ export const stops = [
     id: 'courtyard', category: '04 / THROUGH THE COURTYARD', caption: 'LEFT TO THE ELEVATOR',
     title: 'Through the courtyard. Left to the lift.',
     description: 'The courier crosses the courtyard. Jamie sends the lift down, and it opens on arrival.',
-    hero: ['A courtyard.', 'A small detour.'], note: 'A few footsteps closer to lunch.',
+    hero: ['A courtyard.', 'A small detour.'], note: 'A few footsteps closer to delivery.',
     duration: 11000,
     nextLabel: 'Next',
   },
   {
     id: 'elevator-ride', category: '05 / ALL THE WAY UP', caption: 'NEXT STOP: THE TOP',
-    title: 'Going up. Pizza included.',
-    description: 'The courier steps in, the doors close, and the glass lift carries our lunch to the top floor.',
+    title: 'Going up. Parcel included.',
+    description: 'The courier steps in, the doors close, and the glass lift carries the parcel to the top floor.',
     hero: ['One lift.', 'All the way up.'], note: 'Keep an eye on that little glass elevator.',
     duration: 11000,
     nextLabel: 'Next',
   },
   {
     id: 'rooftop-greeting', category: '06 / WELCOME TO OUR OFFICE', caption: 'THE ROOFTOP TERRACE',
-    title: 'A rooftop hello. And a very warm pizza.',
+    title: 'A rooftop hello. Delivered.',
     description: 'The lift opens onto the attached front terrace. A short walk across the deck leads to Egor at the office door.',
     hero: ['Made it.', 'Welcome up.'], note: 'Same little world. This time, it’s our office.',
     duration: 5200,
     nextLabel: 'Take it again',
   },
+  {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:4500},
+  {id:'return-down',title:'Back to the courtyard.',duration:7000},
+  {id:'return-to-street',title:'On to the next delivery.',duration:10000},
 ];
 
 // One playhead is shared by the actors, doors and camera. Adjacent stops

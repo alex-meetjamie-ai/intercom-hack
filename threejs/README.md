@@ -1,6 +1,6 @@
 # Office Hours — Linienstraße 144
 
-A six-scene Three.js story about a pizza delivery to our Berlin rooftop office. The sunny cream, coral and sage world fills the screen, with minimal dark controls. Geometry is generated locally, using the supplied street and office photos as references. The photos themselves are not bundled or uploaded.
+A six-scene Three.js story about a DHL parcel delivery to our Berlin rooftop office. The sunny cream, coral and sage world fills the screen, with minimal dark controls. Geometry is generated locally, using the supplied street and office photos as references. The photos themselves are not bundled or uploaded.
 
 ## Run
 
@@ -38,7 +38,7 @@ The surrounding floors and dimensions are intentionally schematic. `TOP` is a dr
 - `src/layout.js`: the fixed plan footprint, separate roof/interior orientation, shared coordinates, courtyard-facing entrance and compact terrace bounds.
 - `src/world.js`: street, courtyard, lift, loft, terrace, moving doors and scene updates.
 - `src/geometry.js`: shared materials, geometric helpers, plants, labels and cutaway fading.
-- `src/characters.js`: courier, pizza boxes, Egor, phones and walking/waving poses.
+- `src/characters.js`: courier, parcel, Egor, phones and walking/waving poses.
 - `src/main.js`: rendering, navigation, notification decision controls and optional backend events.
 - `src/style.css`: the minimal dark overlay controls around the full-screen daylight scene.
 
@@ -52,11 +52,9 @@ For development-only still-frame review, open `/?reviewTo=3&reviewAction=0.5` fo
 
 ## Shared backend client
 
-All backend communication lives in `../client`, imported as `@intercom/client`. Three.js only supplies scene callbacks and an audio element.
+Alex's implementation in `../client` owns SIP, WebRTC audio and backend status. `src/intercom-client.js` is a Three.js presentation adapter: it subscribes to the existing `/employee` WebSocket, displays the current approval on the phone and sends Yes/No decisions. It does not change the agent's prompt, speech, entry policy or tools.
 
-Run the existing backend on port 8740, then `npm run dev` in this folder. Vite proxies `/api` and `/sip`; `BACKEND_URL` overrides the local target. Press **Speak to Jamie** to start a real microphone/WebRTC conversation. Live transcript text appears over the scene, and the backend opening the door advances the journey. **End call** or **No** ends the SIP call. **Yes** only continues after the backend grants entry; the current backend has no manual Yes endpoint.
-
-The local backend needs its ElevenLabs agent configuration before voice can work. This integration does not change backend code, provision an agent, or expose its credentials. See `../client/README.md` for the client API. The door remains the backend's simulated door.
+Run the backend on port 8740, then `npm run dev` here. Vite proxies `/api`, `/sip`, and `/employee`; `BACKEND_URL` overrides the target. The bottom-left links open Alex's original Intercom, How it works and Admin pages on the backend.
 
 The rear passage is structural geometry: side piers and an overhead brick section leave the aperture open through the block. Its floor continues to a small rear landing. The obsolete decorative doorway beside the lift has been removed.
 
@@ -66,6 +64,6 @@ The 3D canvas fills the screen. A small dark transport control provides Back, Ne
 
 ## Live presentation sequence
 
-Click Jamie and speak while the camera stays at the intercom. The active call’s access-granted signal moves the camera to Egor; the presentation then waits indefinitely for a manual Yes on his phone. Yes starts the courtyard walk, simulated agent lift dispatch, boarding and ascent automatically. Arrival ends in a close rooftop greeting with confetti. No ends the call and returns to the intercom.
+Click Jamie and speak while the camera stays at the intercom. A pending employee approval from the backend moves the camera to Egor; the presentation waits for a manual Yes or No while the backend request remains pending. Yes starts the courtyard walk, simulated agent lift dispatch, boarding and ascent automatically. Arrival ends in a close rooftop greeting with confetti. No sends a denial and returns to the intercom; Alex’s backend handles the refusal and hangup.
 
 The existing backend grants and unlocks automatically; the manual gate is in the presentation. Lift dispatch is a scene animation because this backend has no elevator endpoint. Backend code is unchanged.

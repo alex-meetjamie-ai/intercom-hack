@@ -86,30 +86,34 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
   label(phone,'•••',.050,.026,[.104,.29,.029],{background:'#edf1ed',color:'#273d32',size:.65});
   box(phone,[.280,.276,.004],[0,.039,.029],'#ffffff',.018);
   label(phone,'INTERCOM',.238,.032,[0,.135,.032],{background:'#ffffff',color:'#74847b',size:.56});
-  label(phone,'Someone is here',.244,.046,[0,.069,.032],{background:'#ffffff',color:'#233c30',size:.69});
-  const deliveryTitle=label(phone,'Pizza delivery',.242,.037,[0,.014,.032],{background:'#ffffff',color:'#53685b',size:.65});
-  const waitingTitle=label(phone,'Waiting outside',.242,.037,[0,.014,.033],{background:'#ffffff',color:'#a36b3a',size:.57});
-  label(phone,'Street entrance',.230,.031,[0,-.046,.032],{background:'#ffffff',color:'#85948b',size:.55});
+  const visitorTitle=label(phone,'No visitor request',.244,.046,[0,.069,.032],{background:'#ffffff',color:'#233c30',size:.69});
+  const deliveryTitle=label(phone,'Waiting for Jamie',.242,.037,[0,.014,.032],{background:'#ffffff',color:'#53685b',size:.65});
+  const requestStatus=label(phone,'Intercom',.230,.031,[0,-.046,.032],{background:'#ffffff',color:'#85948b',size:.55});
   box(phone,[.133,.096,.003],[.076,-.205,.027],'#2d5542',.016);
   box(phone,[.133,.096,.003],[-.076,-.205,.027],'#dce4dd',.016);
   const yes=label(phone,'Yes',.108,.061,PHONE_CHOICES.yes,{background:'#2d5542',color:'#ffffff',size:.57});yes.name='Phone yes';
   const no=label(phone,'No',.108,.061,PHONE_CHOICES.no,{background:'#dce4dd',color:'#3e5346',size:.57});no.name='Phone no';
   yes.userData.phoneChoice='yes';no.userData.phoneChoice='no';
   phone.visible = false;
-  let pizza;
+  let parcel=null;
   if (courier) {
-    ball(body, .33, [0, 2.2, 0], 'coral', [1, .42, 1]);
-    box(body, [.49, .045, .37], [0, 2.19, .24], 'coral', .045);
-    box(body, [.68, .79, .36], [0, 1.16, -.34], 'coral', .08);
-    pizza = group(body, 'Pizza boxes', [0, 1.31, .72]);
-    for (const y of [0, .15]) {
-      box(pizza, [.96, .13, .91], [0, y, 0], 'ivory', .035);
-      box(pizza, [.99, .027, .94], [0, y + .066, 0], 'coral', .01);
-    }
-    const pizzaLabel = label(pizza, 'PIZZA', .66, .29, [0, .234, 0], { color: '#b95642', background: '#fcf6e9', size: .67 });
-    pizzaLabel.rotation.x = -Math.PI / 2;
+    const yellow='#ffcc00',red='#d40511';
+    ball(body,.33,[0,2.2,0],yellow,[1,.42,1]);
+    box(body,[.49,.045,.37],[0,2.19,.24],yellow,.045);
+    label(body,'DHL',.23,.075,[0,2.23,.306],{background:yellow,color:red,font:'900',size:.8});
+    box(body,[.69,.08,.014],[0,1.46,.207],red,.004);
+    label(body,'DHL',.38,.14,[0,1.28,.211],{background:yellow,color:red,font:'900',size:.78});
+    const backLogo=label(body,'DHL',.52,.19,[0,1.29,-.211],{background:yellow,color:red,font:'900',size:.8});
+    backLogo.rotation.y=Math.PI;
+    parcel=group(body,'DHL parcel',[-.08,1.22,.45]);
+    box(parcel,[.86,.55,.44],[0,0,0],'#c99a64',.025);
+    box(parcel,[.10,.006,.44],[0,.278,0],'#e5ca99',.002);
+    box(parcel,[.10,.55,.006],[0,0,.224],'#e5ca99',.002);
+    const shipping=label(parcel,'DHL',.27,.17,[.22,.282,.015],{background:'#fff9ef',color:red,font:'900',size:.54});
+    shipping.rotation.x=-Math.PI/2;
+    for(let i=0;i<9;i++)box(parcel,[.012+(i%3)*.003,.003,.075],[.12+i*.023,.284,-.065],'charcoal',0);
   }
-  const tag = label(root, courier ? 'PIZZA DELIVERY' : name.toUpperCase(), courier ? 1.75 : 1.2, .28, [0, 2.85, 0]);
+  const tag = label(root, courier ? 'DHL DELIVERY' : name.toUpperCase(), courier ? 1.75 : 1.2, .28, [0, 2.85, 0]);
   tag.material.depthWrite = false;
   const worldRotation = new THREE.Quaternion();
   function updateView(camera) {
@@ -118,25 +122,29 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
     root.getWorldQuaternion(worldRotation).invert();
     tag.quaternion.copy(worldRotation).multiply(camera.quaternion);
   }
-  function update({ position: pos, yaw = 0, walking = false, ring = false, waving = false, usePhone = false, phoneAmount = usePhone?1:0, phoneTap = 0, phoneChoice = null, reachTarget = null, reachNormal = [0,0,1], reachAmount = 0, showLabel = true, time = 0 }) {
+  function update({ position: pos, yaw = 0, walking = false, ring = false, waving = false, usePhone = false, phoneAmount = usePhone?1:0, phoneTap = 0, phoneChoice = null, visitorRequest = null, delivered = false, reachTarget = null, reachNormal = [0,0,1], reachAmount = 0, showLabel = true, time = 0 }) {
     if (pos) root.position.fromArray(pos);
+    if(parcel)parcel.visible=!delivered;
     root.rotation.y = yaw;
     const swing = walking ? Math.sin(time * 10) * .48 : 0;
     legs[0].rotation.x = swing; legs[1].rotation.x = -swing;
     body.position.y = walking ? Math.abs(Math.sin(time * 10)) * .055 : 0;
-    arms[0].rotation.set(courier ? -.35 : -swing * .6, 0, courier ? -.06 : 0);
-    arms[1].rotation.set(courier ? -.35 : swing * .6, 0, courier ? .06 : 0);
-    elbows.forEach(elbow => elbow.rotation.set(courier ? -1 : -.12, 0, 0));
+    arms[0].rotation.set(courier&&!delivered ? -.35 : -swing * .6, 0, courier ? -.06 : 0);
+    arms[1].rotation.set(courier&&!delivered ? -.35 : swing * .6, 0, courier ? .06 : 0);
+    elbows.forEach(elbow => elbow.rotation.set(courier&&!delivered ? -1 : -.12, 0, 0));
     if (ring) {
       arms[1].rotation.set(-1.13, 0, .32);
       elbows[1].rotation.x = -.25;
     }
     if (waving) {
-      arms[1].rotation.set(-.15, 0, -2.1 + Math.sin(time * 6) * .15);
-      elbows[1].rotation.x = -.4;
+      // Keep the greeting below shoulder height, clear of faces and the parcel.
+      arms[1].rotation.set(-.15, 0, -.45 + Math.sin(time * 3) * .05);
+      elbows[1].rotation.x = -.25;
     }
     phone.visible=phoneAmount>.001;
-    waitingTitle.visible=phoneChoice==='no'&&phoneTap===0;deliveryTitle.visible=!waitingTitle.visible;
+    visitorTitle.userData.setText(visitorRequest?.name?`${visitorRequest.name} is here`:'No visitor request');
+    deliveryTitle.userData.setText(visitorRequest?.matched_records?.[0]?.title|| (visitorRequest?'Entry request':'Waiting for Jamie'));
+    requestStatus.userData.setText(({pending:'Awaiting your approval',allowed:'Entry approved',denied:'Entry denied',expired:'Request expired',cancelled:'Call ended'})[visitorRequest?.status]||'Intercom');
     phone.position.set(PHONE_POSE.position[0],PHONE_POSE.position[1]-.45*(1-phoneAmount),PHONE_POSE.position[2]);
     phone.scale.setScalar(.8+.2*phoneAmount);
     arms.forEach(arm=>arm.visible=true);reachRigs.forEach(rig=>rig.rig.visible=false);
