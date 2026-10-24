@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { group, box, ball, cylinder, beam, label, plant, tree, material } from './geometry.js';
-import { createPerson } from './characters.js';
+import { createPerson,createRaptor } from './characters.js';
 import { TOP } from './journey.js';
 import {OFFICE_ROTATION,OFFICE_ORIGIN,TERRACE,COURIER_LANDING,OFFICE_DOOR_LOCAL,LIFT_POSITION,LIFT_OPENING,REAR_BUILDING,REAR_PASSAGE,ROOF_ROTATION,ROOM_ROTATION,roomPoint,INTERCOM_BUTTON,LIFT_CALL_BUTTON} from './layout.js';
 
@@ -136,7 +136,7 @@ function buildStreet(parent) {
   for(let y=.06;y<=.26;y+=.05)box(plaque,[.38,.016,.012],[0,y,.085],'charcoal',0);
   const bell=box(plaque,[.50,.19,.08],[0,-.10,.11],bellMaterial,.03);bell.name='Intercom button';
   const jamieLabels={};
-  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Cancel',connected:'End call',disconnecting:'Ending…',offline:'Jamie'})){
+  for(const [key,text] of Object.entries({idle:'Jamie',connecting:'Cancel',connected:'End call',disconnecting:'Ending…',offline:'Jamie',denied:'Denied'})){
     jamieLabels[key]=label(plaque,text,.45,.125,[0,-.10,.17],{background:'#355648',color:'#ffffff',size:.61});
     jamieLabels[key].visible=key==='idle';
   }
@@ -469,9 +469,20 @@ export function createWorld() {
   const courtyard=buildCourtyard(root);
   const street=buildStreet(root),lift=buildLift(root),office=buildLoft(root);
   const courier=createPerson(root,{name:'Courier',courier:true,shirt:'#ffcc00'});
+  const raptor=createRaptor(root);
   const egor=createPerson(root,{name:'Egor',glasses:true,shirt:'teal'});
   const colleague=createPerson(root,{name:'Hello!',shirt:'yellow',position:roomPoint([2.6,0,3.4])});
   const hello=label(root,'Delivered!',2.55,.54,[COURIER_LANDING[0]+.8,TOP+3.9,COURIER_LANDING[2]],{background:'#fcf6e9',color:'#528c80'});
+  const rippedMount=box(street.facade,[.53,.76,.012],[2.5,1.8,10.61],'#504d42',.01);rippedMount.visible=false;
+  const destruction=group(root,'Cartoon intercom explosion');
+  const debris=Array.from({length:22},(_,i)=>{
+    const piece=box(destruction,[.04+(i%3)*.03,.05+(i%4)*.03,.04],[0,0,0],i%3===0?'#e8b353':i%2?'#667a74':'#d7ddd0',.007);
+    piece.userData={angle:i*2.39996,speed:.8+(i%5)*.28,up:1.4+(i%4)*.35};return piece;
+  });
+  const flash=ball(destruction,.45,[2.5,1.8,10.85],material('#ffe7a2',{emissive:'#ffb52e',emissiveIntensity:2,transparent:true,opacity:1,depthWrite:false}),[1,1,1]);
+  const smoke=Array.from({length:7},(_,i)=>ball(destruction,.22,[0,0,0],material('#b7b4a5',{transparent:true,opacity:.6,depthWrite:false}),[1,1,1]));
+  destruction.visible=false;
+  const bitePoint=new THREE.Vector3();
   const ringGroup=group(root,'Doorbell signal',[2.5,1.7,10.88]);
   const ringMaterial=new THREE.MeshBasicMaterial({color:'#dc9369',transparent:true,opacity:.8,side:THREE.DoubleSide,depthWrite:false});
   const rings=[.3,.5,.7].map(radius=>{
@@ -497,14 +508,16 @@ export function createWorld() {
   function update(s,time=0,camera) {
     state=s;
     lift.dispatch.visible=s.stage===3&&s.liftCalled>.15&&s.liftY>.1;
-    for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.callStatus||'idle');
+    for(const [key,label] of Object.entries(street.jamieLabels))label.visible=key===(s.deniedGlow?'denied':s.callStatus||'idle');
     const p={street:1,courtyard:1,loft:1,terrace:1,shaft:1,lowerShaft:1,...s.presentation};
     for (const name of ['street','courtyard','loft','terrace','shaft']) fades[name](p[name],s);
     for(const {pivot,side} of street.leaves) pivot.rotation.y=-side*s.streetDoor*1.4;
     ringMaterial.opacity=.8*p.street*(s.facade??1);
-    ringGroup.visible=s.ring>.1&&ringMaterial.opacity>.003;
+    ringGroup.visible=s.ring>.1&&ringMaterial.opacity>.003&&!(s.raptorBite>.47);
     rings.forEach((ring,i)=>{const t=(time*.8+i/3)%1;ring.scale.setScalar(.65+t*.8);});
-    street.bell.material.color.set(s.approved||s.intercomPress>.4 ? '#8db496':'#c3c5b7');
+    street.bell.material.color.set(s.deniedGlow?'#d9644f':s.approved||s.intercomPress>.4 ? '#8db496':'#c3c5b7');
+    street.bell.material.emissive.set(s.deniedGlow?'#a52a1d':'#000000');
+    street.bell.material.emissiveIntensity=s.deniedGlow?.45+.25*Math.sin(time*5):0;
     street.bell.position.z=.12-.018*(s.intercomPress||0);
     lift.callButton.position.x=.12-.018*(s.liftPress||0);
     lift.callButton.material.color.set(s.liftCalled>.5?'#eac275':'#b7c6b8');
@@ -516,13 +529,42 @@ export function createWorld() {
       door.position.x=side*THREE.MathUtils.lerp(closed,open,atLanding?s.liftDoor:0);
     });
     office.door.rotation.y=s.officeDoor*1.15;
+    raptor.update({position:s.raptor,yaw:s.raptorYaw,walking:s.raptorWalking,press:s.raptorPress||0,bite:s.raptorBite||0,viewerBite:s.viewerBite||0,scale:s.raptorScale||1,time});
+    const bite=s.raptorBite||0;
+    const burst=(s.raptorFinale||0)-1.55;
+    destruction.visible=burst>0;
+    if(burst>0){
+      const t=Math.min(burst,2.5);
+      for(const piece of debris){
+        const {angle,speed,up}=piece.userData;
+        piece.position.set(2.5+Math.cos(angle)*speed*t,Math.max(.05,1.8+up*t-3*t*t),10.9+Math.abs(Math.sin(angle))*speed*t);
+        piece.rotation.set(t*speed*4,angle+t*5,t*3);
+      }
+      flash.visible=burst<.32;flash.scale.setScalar(.3+Math.min(burst,.32)*5);flash.material.opacity=Math.max(0,1-burst/.32);
+      smoke.forEach((puff,i)=>{
+        puff.visible=burst<2;
+        puff.position.set(2.5+Math.sin(i*2.4)*(.2+t*.3),1.8+t*.65+(i%3)*.13,10.95+Math.cos(i)*.12);
+        puff.scale.setScalar(.8+t*2);puff.material.opacity=Math.max(0,.45*(1-burst/2));
+      });
+    }
+    rippedMount.visible=bite>.47;
+    street.plaque.visible=bite<.98;
+    street.plaque.position.set(2.5,1.8,10.67);street.plaque.rotation.set(0,0,0);street.plaque.scale.setScalar(1);
+    if(bite>.47){
+      raptor.root.updateWorldMatrix(true,true);
+      raptor.mouth.getWorldPosition(bitePoint);
+      street.plaque.parent.worldToLocal(bitePoint);
+      street.plaque.position.copy(bitePoint);
+      street.plaque.rotation.set(.1,Math.PI/2,(bite-.47)*2);
+      street.plaque.scale.setScalar(Math.max(0,1-Math.max(0,(bite-.72)/.26)));
+    }
     courier.update({position:s.visitor,yaw:s.visitorYaw,walking:s.walking,delivered:s.delivered,reachTarget:s.stage===0?INTERCOM_BUTTON:LIFT_CALL_BUTTON,reachNormal:s.stage===0?[0,0,1]:[1,0,0],reachAmount:s.stage===0?s.intercomReach:s.liftReach,showLabel:false,time});
-    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,visitorRequest:s.visitorRequest,waving:s.greet>.5,showLabel:false,time});
+    egor.update({position:s.egor,yaw:s.egorYaw,walking:s.egorWalking,usePhone:s.phone>.01,phoneAmount:s.phone,phoneTap:s.phoneTap||0,phoneChoice:s.phoneChoice,visitorRequest:s.phoneNotice||s.visitorRequest,waving:s.greet>.5,showLabel:false,time});
     colleague.update({position:roomPoint([2.6,0,3.4]),yaw:-.9+ROOM_ROTATION,waving:s.greet>.3,showLabel:false,time});
     const upstairs=s.visitor[1]>=TOP-.5;
     const courierOpacity=Math.max(p.street,p.courtyard,p.shaft*(upstairs?1:p.lowerShaft),upstairs?p.terrace:0);
     const officeOpacity=Math.max(p.loft,p.terrace);
-    fades.courier(courierOpacity,s); fades.egor(officeOpacity,s);
+    fades.courier(s.courierGone?0:courierOpacity,s); fades.egor(officeOpacity,s);
     fades.colleague(officeOpacity,s);
     fades.hello(0,s);
     updateView(camera);

@@ -2,6 +2,17 @@ import * as THREE from 'three';
 import { group, box, ball, cylinder, label, material } from './geometry.js';
 import {PHONE_POSE,PHONE_CHOICES} from './layout.js';
 
+let dhlTexture;
+function dhlLogo(parent,width,position){
+  if(!dhlTexture){
+    dhlTexture=new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}branding/dhl.svg`);
+    dhlTexture.colorSpace=THREE.SRGBColorSpace;
+    dhlTexture.anisotropy=8;
+  }
+  const logo=new THREE.Mesh(new THREE.PlaneGeometry(width,width*65/284),new THREE.MeshBasicMaterial({map:dhlTexture,transparent:false,alphaTest:.5,depthWrite:true,side:THREE.FrontSide}));
+  logo.name='DHL logo';logo.position.fromArray(position);parent.add(logo);return logo;
+}
+
 export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal', courier = false, glasses = false }) {
   const root = group(parent, name, position);
   const body = group(root, 'Body');
@@ -100,16 +111,16 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
     const yellow='#ffcc00',red='#d40511';
     ball(body,.33,[0,2.2,0],yellow,[1,.42,1]);
     box(body,[.49,.045,.37],[0,2.19,.24],yellow,.045);
-    label(body,'DHL',.23,.075,[0,2.23,.306],{background:yellow,color:red,font:'900',size:.8});
+    dhlLogo(body,.24,[0,2.22,.328]);
     box(body,[.69,.08,.014],[0,1.46,.207],red,.004);
-    label(body,'DHL',.38,.14,[0,1.28,.211],{background:yellow,color:red,font:'900',size:.78});
-    const backLogo=label(body,'DHL',.52,.19,[0,1.29,-.211],{background:yellow,color:red,font:'900',size:.8});
+    dhlLogo(body,.35,[0,1.22,.204]);
+    const backLogo=dhlLogo(body,.45,[0,1.22,-.204]);
     backLogo.rotation.y=Math.PI;
     parcel=group(body,'DHL parcel',[-.08,1.22,.45]);
     box(parcel,[.86,.55,.44],[0,0,0],'#c99a64',.025);
     box(parcel,[.10,.006,.44],[0,.278,0],'#e5ca99',.002);
     box(parcel,[.10,.55,.006],[0,0,.224],'#e5ca99',.002);
-    const shipping=label(parcel,'DHL',.27,.17,[.22,.282,.015],{background:'#fff9ef',color:red,font:'900',size:.54});
+    const shipping=dhlLogo(parcel,.27,[.22,.285,.015]);
     shipping.rotation.x=-Math.PI/2;
     for(let i=0;i<9;i++)box(parcel,[.012+(i%3)*.003,.003,.075],[.12+i*.023,.284,-.065],'charcoal',0);
   }
@@ -144,7 +155,7 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
     phone.visible=phoneAmount>.001;
     visitorTitle.userData.setText(visitorRequest?.name?`${visitorRequest.name} is here`:'No visitor request');
     deliveryTitle.userData.setText(visitorRequest?.matched_records?.[0]?.title|| (visitorRequest?'Entry request':'Waiting for Jamie'));
-    requestStatus.userData.setText(({pending:'Awaiting your approval',allowed:'Entry approved',denied:'Entry denied',expired:'Request expired',cancelled:'Call ended'})[visitorRequest?.status]||'Intercom');
+    requestStatus.userData.setText(({pending:'Awaiting your approval',allowed:'Entry approved',denied:'Entry denied',expired:'Request expired',cancelled:'Call ended',arriving:'New visitor detected'})[visitorRequest?.status]||'Intercom');
     phone.position.set(PHONE_POSE.position[0],PHONE_POSE.position[1]-.45*(1-phoneAmount),PHONE_POSE.position[2]);
     phone.scale.setScalar(.8+.2*phoneAmount);
     arms.forEach(arm=>arm.visible=true);reachRigs.forEach(rig=>rig.rig.visible=false);
@@ -163,4 +174,118 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
     tag.quaternion.copy(root.quaternion).invert();
   }
   return { root, update, updateView, phone, phoneButtons:[yes,no] };
+}
+
+// Friendly low-poly surprise visitor, built from the same rounded materials.
+export function createRaptor(parent){
+  const root=group(parent,'Raptor visitor');root.visible=false;
+  const body=group(root,'Raptor body');
+  const green='#688965',light='#c9d5a4',dark='#354e3b',claw='#f1e6ce';
+  function bone(mesh,a,b){mesh.position.copy(a).add(b).multiplyScalar(.5);mesh.scale.y=a.distanceTo(b);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());}
+  function limb(parent,a,b,r,color=green){
+    const mesh=cylinder(parent,r,1,[0,0,0],color,r*.8);bone(mesh,new THREE.Vector3(...a),new THREE.Vector3(...b));return mesh;
+  }
+  // Forward-leaning hips and chest, with a pale throat and belly.
+  const torso=ball(body,.53,[0,1.13,-.05],green,[.72,.96,1.28]);torso.rotation.x=.28;
+  ball(body,.32,[0,1.35,.29],light,[.82,1.28,.52]);
+  const neck=ball(body,.25,[0,1.72,.28],green,[.9,1.5,1]);neck.rotation.x=.27;
+  ball(body,.2,[0,1.68,.43],light,[.76,1.35,.58]);
+  // A long, tapered tail counterbalances the head instead of a short cone.
+  const tail=group(body,'Sweeping tail');
+  const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(0,1.15,-.38),new THREE.Vector3(.04,1.06,-1.05),new THREE.Vector3(.19,1.2,-1.8),new THREE.Vector3(.38,1.42,-2.45)]);
+  const vertices=[],indices=[],rings=24,sides=12;
+  for(let i=0;i<=rings;i++){
+    const t=i/rings,center=curve.getPoint(t),tangent=curve.getTangent(t).normalize();
+    const side=new THREE.Vector3(0,1,0).cross(tangent).normalize(),up=tangent.clone().cross(side).normalize();
+    const radius=.23*Math.pow(1-t,1.2)+.006;
+    for(let j=0;j<sides;j++){
+      const angle=j/sides*Math.PI*2,point=center.clone().addScaledVector(side,Math.cos(angle)*radius).addScaledVector(up,Math.sin(angle)*radius);
+      vertices.push(point.x,point.y,point.z);
+      if(i<rings){const a=i*sides+j,b=i*sides+(j+1)%sides;indices.push(a,b,a+sides,b,b+sides,a+sides);}
+    }
+  }
+  const tailGeometry=new THREE.BufferGeometry();tailGeometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));tailGeometry.setIndex(indices);tailGeometry.computeVertexNormals();
+  const tailMesh=new THREE.Mesh(tailGeometry,material(green));tailMesh.castShadow=true;tailMesh.receiveShadow=true;tail.add(tailMesh);
+  // Wedge-shaped muzzle, separate lower jaw, nostrils and alert amber eyes.
+  const head=group(body,'Raptor head',[0,2.03,.42]);
+  ball(head,.31,[0,.08,0],green,[1.05,.92,1.05]);
+  box(head,[.50,.27,.57],[0,-.01,.32],green,.10);
+  const jaw=group(head,'Lower jaw',[0,-.13,.02]);
+  box(jaw,[.43,.085,.51],[0,-.06,.29],light,.025);
+  box(head,[.46,.023,.44],[0,-.125,.34],dark,.008);
+  for(const side of [-1,1]){
+    ball(head,.123,[side*.285,.16,.15],'#dfb950',[.43,1,1]);
+    ball(head,.07,[side*.337,.16,.18],dark,[.24,1.1,.7]);
+    ball(head,.025,[side*.354,.19,.195],'ivory',[.3,1,1]);
+    const brow=box(head,[.09,.07,.25],[side*.29,.27,.13],dark,.024);brow.rotation.x=-.13;
+    ball(head,.027,[side*.185,.035,.608],dark,[1,.7,.4]);
+    for(let i=0;i<4;i++){
+      const tooth=cylinder(head,.024,.065,[side*.205,-.15,.16+i*.105],claw,0);tooth.rotation.z=Math.PI;
+    }
+    // Subtle flank markings read at presentation distance.
+    for(let i=0;i<3;i++){
+      const stripe=ball(body,.11,[side*(.36-i*.025),1.15+i*.11,-.28+i*.16],dark,[.20,1.3,.7]);stripe.rotation.x=-.5;
+    }
+  }
+  const legs=[-1,1].map(side=>{
+    const leg=group(body,'Bent raptor leg',[side*.31,1.02,-.12]);
+    const thigh=ball(leg,.24,[0,-.22,.12],green,[.9,1.3,1]);thigh.rotation.x=-.45;
+    limb(leg,[0,-.35,.22],[0,-.68,-.07],.095);
+    ball(leg,.105,[0,-.68,-.07],green);
+    limb(leg,[0,-.68,-.07],[0,-.92,.12],.065);
+    box(leg,[.25,.105,.31],[0,-.96,.22],green,.04);
+    for(const x of [-.09,0,.09]){
+      limb(leg,[x,-.955,.26],[x,-.98,.48],.034);
+      const nail=cylinder(leg,.042,.16,[x,-.98,.53],claw,0);nail.rotation.x=Math.PI/2;
+    }
+    // The lifted inner sickle claw makes the silhouette unmistakably raptor-like.
+    const sickle=cylinder(leg,.065,.24,[-side*.15,-.81,.37],dark,0);sickle.rotation.x=.72;
+    return leg;
+  });
+  const upper=box(body,[.15,1,.15],[0,0,0],green,.045);
+  const lower=box(body,[.11,1,.11],[0,0,0],green,.035);
+  function makeHand(side){
+    const hand=group(body,'Clawed hand');ball(hand,.085,[0,0,0],green,[1,.7,1.2]);
+    for(let i=0;i<3;i++){
+      const x=(i-1)*.052;
+      limb(hand,[x,0,.035],[x,-.015,.14],.023);
+      const nail=cylinder(hand,.022,.10,[x,-.035,.17],claw,0);nail.rotation.x=1.1;
+    }
+    return hand;
+  }
+  const hand=makeHand(1),other=makeHand(-1);other.position.set(-.42,1.29,.57);
+  limb(body,[-.33,1.57,.23],[-.49,1.35,.39],.072);
+  limb(body,[-.49,1.35,.39],[-.42,1.29,.57],.055);
+  const mouthInterior=box(head,[.40,.59,.22],[0,-.37,.31],'#241717',.06);mouthInterior.visible=false;
+  const tongue=box(jaw,[.27,.025,.28],[0,-.007,.34],'#bc7777',.02);
+  for(const x of [-.16,-.08,0,.08,.16]){
+    const tooth=cylinder(jaw,.027,.085,[x,.045,.50],claw,0);
+  }
+  const mouth=group(head,'Bite point',[0,-.11,.57]);
+  function update({position,yaw,walking,press,bite=0,viewerBite=0,scale=1,time=0}){
+    root.visible=Boolean(position);if(!position)return;
+    root.position.fromArray(position);root.rotation.y=yaw;root.scale.setScalar(scale);
+    body.position.y=walking?Math.abs(Math.sin(time*9))*.05:Math.sin(time*2)*.012;
+    legs.forEach((leg,i)=>leg.rotation.x=walking?Math.sin(time*9+i*Math.PI)*.36:0);
+    tail.rotation.y=Math.sin(time*2)*.07;head.rotation.z=Math.sin(time*1.7)*.025;
+    const ease=(a,b)=>{const t=Math.max(0,Math.min(1,(bite-a)/(b-a)));return t*t*(3-2*t);};
+    const lunge=ease(.08,.36)*(1-ease(.48,.7));
+    body.position.x=.20*lunge;
+    head.position.set(.24*lunge,2.03-.22*lunge,.42+.02*lunge-.22*ease(.48,.72));
+    head.rotation.x=.08*lunge+Math.sin(bite*45)*.04*ease(.58,.7)*(1-ease(.88,1));
+    jaw.rotation.x=.65*ease(.05,.25)*(1-ease(.35,.47)) + Math.max(0,Math.sin(bite*55))*.22*ease(.6,.7)*(1-ease(.9,1));
+    if(viewerBite>0){
+      head.rotation.z=0;head.rotation.x=-.05*viewerBite;
+      jaw.rotation.x=Math.max(jaw.rotation.x,1.1*viewerBite);
+    }
+    mouthInterior.visible=viewerBite>.1;
+    if(bite>0)press*=1-ease(0,.15);
+    root.updateWorldMatrix(true,true);
+    const shoulder=new THREE.Vector3(.34,1.58,.24),rest=new THREE.Vector3(.44,1.24,.60);
+    const touch=body.worldToLocal(new THREE.Vector3(2.5,1.7,10.874));touch.z-=.17;
+    const target=rest.lerp(touch,press);
+    const elbow=shoulder.clone().lerp(target,.5).add(new THREE.Vector3(.18,-.1,0));
+    bone(upper,shoulder,elbow);bone(lower,elbow,target);hand.position.copy(target);
+  }
+  return {root,update,mouth};
 }

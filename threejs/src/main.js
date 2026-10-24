@@ -2,10 +2,11 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createWorld } from './world.js';
-import { stops, sampleJourney, boundaries, atTime, phase } from './journey.js';
+import { stops, sampleJourney, boundaries, atTime, phase, STREET, turn } from './journey.js';
 import { journeyFrame, fitFrame, blendFrames, presentationFor } from './camera.js';
 import {createIntercomClient} from './intercom-client.js';
 import {createDemoStatus} from './demo-status.js';
+import {createAmbience} from './ambience.js';
 import {TERRACE,OFFICE_ORIGIN} from './layout.js';
 
 const $ = id => document.getElementById(id);
@@ -37,8 +38,11 @@ function start(){
   Object.assign(sun.shadow.camera,{left:-35,right:35,top:35,bottom:-35,near:.5,far:140});
   sun.target.position.set(0,7,-3);scene.add(sun,sun.target);
   const fill=new THREE.DirectionalLight(0xdeeee5,1.3);fill.position.set(20,25,-18);scene.add(fill);
+  const ambience=createAmbience();
+  window.addEventListener('pagehide',()=>ambience.destroy(),{once:true});
   const world=createWorld();scene.add(world.group);
-  const demoStatus=createDemoStatus({onStop:()=>stopDemo(),onDecision:choice=>chooseOnPhone(choice)});
+  const blackout=document.createElement('div');blackout.className='finale-blackout';blackout.setAttribute('aria-hidden','true');$('app').append(blackout);
+  const demoStatus=createDemoStatus({onStop:()=>primaryControl(),onDecision:choice=>chooseOnPhone(choice),onRaptor:()=>restartRaptorScene(),onSound:()=>ambience.toggle()});
   // One fixed ground plane keeps shadows spatially consistent during travel.
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(250,250),new THREE.ShadowMaterial({color:0x646d54,opacity:.11}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
@@ -46,8 +50,10 @@ function start(){
   let current=0,busy=false,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
   let toastTimer,denied=false,freeOrbit=false,playhead=stops[0].duration*.32,decisionAnimation=null;
   let callStatus='idle',interactionStarted=false;
+  let introStarted=false,introComplete=false,introStart=null;
+  let dhlCallAt=0,dhlRejected=false,dhlExitStart=null;
   let backendState=null,activeApproval=null,accepted=false,pendingRequest=false;
-  let playback=null,returnAt=null;
+  let playback=null,returnAt=null,raptorCallStarted=false,raptorCallVersion=0,raptorCallAt=0,raptorDenied=false,raptorBiteStart=null;
   let state=sampleJourney(0,.32),canonical=journeyFrame(0,.32,aspect);
 
   function applyFrame(frame){
@@ -68,7 +74,7 @@ function start(){
     $('app').dataset.scene=String(current);
     $('step-title').textContent=stop.title;
     restart.disabled=busy;
-    $('call-jamie').disabled=busy&&!client.active;
+    $('call-jamie').disabled=(!introComplete&&current===0)||(busy&&!client.active);
     $('call-lift').hidden=true;
     $('allow').hidden=$('deny').hidden=!(current===1&&!busy);
     $('allow').disabled=$('deny').disabled=busy;
@@ -79,9 +85,14 @@ function start(){
     clearTimeout(toastTimer);$('api-feedback').textContent=error.message||'Voice backend unavailable.';
     $('api-feedback').hidden=false;toastTimer=setTimeout(()=>$('api-feedback').hidden=true,8000);
   }
+  function markRejected(){
+    pendingRequest=false;
+    if(current===10)raptorDenied=true;
+    else if(current===0||current===1)dhlRejected=true;
+  }
   const client=createIntercomClient({baseUrl:import.meta.env.VITE_API_BASE_URL||'',audio:$('remote-audio'),onError:showApiError,
     onAudioBlocked:blocked=>{$('play-audio').hidden=!blocked;},
-    onApproval:request=>{activeApproval=request;demoStatus.updateApproval(request);},
+    onApproval:request=>{if(['denied','expired'].includes(request?.status))markRejected();activeApproval=request;demoStatus.updateApproval(request);},
     onEvent:event=>demoStatus.event(event.kind,event.title,event.detail,event.state),
     onState:state=>{
       callStatus=state;demoStatus.setCall(state);updateUI();
@@ -89,14 +100,41 @@ function start(){
       if(interactionStarted)pendingRequest=true;
     },onStatus:status=>{
       backendState=status;demoStatus.updateBackend(status);
-      const message=status.transcript?.at(-1);
+      const callAt=current===10?raptorCallAt:dhlCallAt;
+      if(callAt&&status.actions?.some(action=>Date.parse(action.at)>=callAt&&action.tool==='deny_entry'&&action.ok))markRejected();
+      const message=interactionStarted?status.transcript?.at(-1):null;
       $('live-transcript').textContent=message?`${message.speaker}: ${message.text}`:'';
       $('live-transcript').hidden=!message;
 
     },
   });
+  async function startRaptorCall(){
+    ambience.start().catch(()=>{});
+    raptorCallStarted=true;raptorCallAt=Date.now();raptorDenied=false;raptorBiteStart=null;
+    const version=++raptorCallVersion;
+    interactionStarted=true;pendingRequest=false;activeApproval=null;
+    try{
+      if(client.active)await client.disconnect();
+      if(version!==raptorCallVersion||current!==10)return;
+      await client.ring();
+    }catch(error){showApiError(error);}
+  }
+  function startIntro(){
+    ambience.start().catch(()=>{});
+    if(introStarted||busy||client.active)return;
+    introStarted=true;introStart=performance.now();busy=true;
+    freeOrbit=false;controls.enabled=false;updateUI();
+  }
+  function primaryControl(){
+    if(current===0&&!introStarted&&!client.active)startIntro();else stopDemo();
+  }
   function pressIntercom(){
-    if(current!==0)return;
+    if(current===10){
+      if(client.active){raptorCallVersion++;client.disconnect().catch(showApiError);}
+      else startRaptorCall();
+      return;
+    }
+    if(current!==0||!introComplete)return;
     if(client.active){
       interactionStarted=false;pendingRequest=false;playback=null;busy=false;freeOrbit=false;
       playhead=stops[0].duration*.32;controls.enabled=true;
@@ -104,7 +142,7 @@ function start(){
       client.disconnect().catch(showApiError);updateUI();return;
     }
     if(busy)return;
-    interactionStarted=true;
+    interactionStarted=true;dhlCallAt=Date.now();dhlRejected=false;dhlExitStart=null;
     playhead=stops[0].duration*.32;
     goTo(0,{replay:true});
     client.ring();
@@ -127,16 +165,30 @@ function start(){
   }
 
   function chooseOnPhone(choice){
+    if(!busy&&current===10){client.decide(choice==='yes').catch(showApiError);return;}
     if(busy||current!==1)return;
     freeOrbit=false;controls.enabled=false;busy=true;
     decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
   function stopDemo(){
+    ambience.stop();
+    introStarted=false;introComplete=false;introStart=null;dhlCallAt=0;dhlRejected=false;dhlExitStart=null;
+    demoStatus.resetConversation();$('live-transcript').hidden=true;
+    raptorCallVersion++;raptorCallStarted=false;raptorCallAt=0;raptorDenied=false;raptorBiteStart=null;
     interactionStarted=false;accepted=false;pendingRequest=false;denied=false;
     decisionAnimation=null;playback=null;returnAt=null;busy=false;current=0;
     playhead=stops[0].duration*.32;freeOrbit=false;controls.enabled=true;
     clearTimeout(toastTimer);$('api-feedback').hidden=true;
-    client.disconnect().catch(showApiError);updateUI();
+    const stopped=client.disconnect().catch(showApiError);updateUI();return stopped;
+  }
+  async function restartRaptorScene(){
+    const stopped=stopDemo();
+    ambience.start().catch(()=>{});
+    const version=raptorCallVersion;
+    current=10;playhead=boundaries[10];busy=true;updateUI();
+    await stopped;
+    if(version!==raptorCallVersion)return;
+    busy=false;goTo(10,{replay:true});
   }
   restart.addEventListener('click',stopDemo);
   $('allow').addEventListener('click',()=>chooseOnPhone('yes'));
@@ -147,11 +199,11 @@ function start(){
     return new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);
   }
   function hitAction(event){
-    if(busy&&!(current===0&&client.active))return null;
+    if((current===0&&!introComplete)||(busy&&!(current===0&&client.active)))return null;
     const point=pointer(event);
     if(current===1)return world.pickPhoneChoice(point,camera);
     const hit=world.pickInteraction(point,camera);
-    return current===0&&hit==='intercom'?hit:null;
+    return (current===0||current===10)&&hit==='intercom'?hit:null;
   }
   // Hit-test before OrbitControls sees pointer-down. Otherwise its start
   // event reframes the scene and moves the button before pointer-up arrives.
@@ -208,6 +260,9 @@ function start(){
       playhead=playback.from+(playback.to-playback.from)*t;
       if(t===1){playback=null;busy=false;controls.enabled=true;updateUI();}
     }
+    if(!review&&introStart!==null&&!introComplete&&now-introStart>=3000){
+      introComplete=true;introStart=null;busy=false;controls.enabled=true;updateUI();
+    }
     if(decisionAnimation){
       const pending=decisionAnimation;
       if(!pending.sent&&now-pending.start>=440){
@@ -221,19 +276,50 @@ function start(){
         else{denied=true;accepted=false;pendingRequest=false;interactionStarted=false;goTo(0,{replay:true});}
       }
     }
+    if(!review&&current===0&&dhlRejected&&!busy&&dhlExitStart===null){
+      dhlExitStart=now;busy=true;freeOrbit=false;controls.enabled=false;updateUI();
+    }
+    if(!review&&dhlExitStart!==null&&now-dhlExitStart>=4800){
+      dhlExitStart=null;dhlRejected=false;busy=false;
+      current=10;playhead=boundaries[10];goTo(10,{replay:true});
+    }
     if(!review&&!busy&&!decisionAnimation){
       if(pendingRequest&&current===0){pendingRequest=false;goTo(1);}
       else if(current===2)goTo(3);
       else if(current===3&&playhead>=boundaries[4]-.01)goTo(4);
       else if(current===4)goTo(5);
-      else if(current===5){returnAt??=now;if(now-returnAt>2500)goTo(6);}
+      else if(current===5){returnAt??=now;if(now-returnAt>900)goTo(6);}
       else if(current===6)goTo(7);
       else if(current===7)goTo(8);
+      else if(current===8)goTo(9);
+      else if(current===9)goTo(10);
     }
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor(),callStatus};
+    if(!review&&current===0&&!introComplete){
+      const p=introStart===null?0:Math.min(1,(now-introStart)/3000),walk=phase(p,0,.85);
+      state.visitor=[12+(STREET[0]-12)*walk,0,STREET[2]];
+      state.visitorYaw=turn(-Math.PI/2,Math.PI,phase(p,.75,1));
+      state.walking=introStarted&&p<.85;state.courierGone=!introStarted;
+    }
+    state.readyToStart=!review&&current===0&&!introStarted;
+
+    if(!review&&cursor.index===10&&cursor.progress>=.86&&!raptorCallStarted)startRaptorCall();
+    if(!review&&current===10){
+      state.streetDoor=backendState?.door==='open'?1:0;
+      if(raptorDenied&&callStatus==='idle'&&raptorBiteStart===null)raptorBiteStart=now;
+      state.raptorFinale=raptorBiteStart===null?0:(now-raptorBiteStart)/1000;
+      state.raptorBite=Math.min(1,state.raptorFinale/3.4);
+    }
     if(!review&&!accepted&&current<=1)state.streetDoor=0;
     if(!interactionStarted&&!review&&current===0){state.intercomReach=0;state.intercomPress=0;state.ring=0;}
+    if(dhlExitStart!==null&&current===0){
+      const p=Math.min(1,(now-dhlExitStart)/4800),walk=phase(p,.20,.98);
+      state.visitor=[STREET[0]+(12-STREET[0])*walk,0,STREET[2]];
+      state.visitorYaw=turn(Math.PI,Math.PI/2,phase(p,.05,.20));
+      state.walking=p>.20&&p<.98;state.deniedGlow=1;state.ring=0;state.streetDoor=0;
+    }
+    if(current===10&&raptorDenied)state.deniedGlow=1;
     if(denied&&current===1)state.phoneChoice='no';
     if(decisionAnimation){
       const p=Math.min(1,(now-decisionAnimation.start)/1100);
@@ -249,6 +335,31 @@ function start(){
       state={...state,facade:1,leftWing:1,greet:0};
       camera.up.set(0,0,1);
       applyFrame({position:[0,80,0],target:[0,0,0],size:49});
+    }
+    const finale=state.raptorFinale||0;
+    if(finale>3.4&&state.raptor){
+      const turn=phase(finale,3.4,4.35),approach=phase(finale,4.25,6.35);
+      const dx=camera.position.x-state.raptor[0],dz=camera.position.z-state.raptor[2],length=Math.hypot(dx,dz);
+      const angle=Math.atan2(dx,dz);
+      state.raptorYaw+=Math.atan2(Math.sin(angle-state.raptorYaw),Math.cos(angle-state.raptorYaw))*turn;
+      state.raptor=[state.raptor[0]+dx/length*approach*1.4,0,state.raptor[2]+dz/length*approach*1.4];
+      state.raptorWalking=approach>0&&approach<.8;
+      state.viewerBite=phase(finale,4.8,5.8)*(1-phase(finale,6.35,6.58));
+      const faceTarget=[state.raptor[0]+Math.sin(angle)*.62,1.92-.08*phase(finale,5.8,6.6),state.raptor[2]+Math.cos(angle)*.62];
+      const faceFrame={target:faceTarget,position:[faceTarget[0]+Math.sin(angle)*80,faceTarget[1]+2,faceTarget[2]+Math.cos(angle)*80],size:6.3-5.12*phase(finale,4.2,6.05)-.88*phase(finale,6.05,6.6)};
+      applyFrame(blendFrames(canonical,faceFrame,phase(finale,3.9,4.9)));
+      controls.enabled=false;
+    }
+    $('app').classList.toggle('raptor-attack',finale>4.4);
+    const darkness=phase(finale,6.48,6.72);
+    ambience.update({street:current===0||current===10||(current===2&&cursor.progress>.4),office:current===1||current===5||(current===2&&cursor.progress<=.4)||(current===4&&cursor.progress>.75)||(current===6&&cursor.progress<.5),voice:['connecting','connected','disconnecting'].includes(callStatus),muted:darkness>0,finale:review?0:finale});
+    blackout.style.opacity=String(darkness);
+    $('app').classList.toggle('raptor-blackout',darkness>0);
+    $('app').classList.toggle('raptor-ended',darkness>=.999);
+    if(finale>1.55&&finale<1.9&&!reducedMotion.matches){
+      const shake=(1-(finale-1.55)/.35)*.08;
+      camera.position.x+=Math.sin(finale*110)*shake;
+      camera.position.y+=Math.cos(finale*97)*shake;
     }
     ground.position.y=-.67;ground.material.opacity=.1;
     world.update({...state,visitorRequest:activeApproval},review?1:elapsed,camera);world.updateView(camera);
