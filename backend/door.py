@@ -91,6 +91,18 @@ class Visitor:
         return result
 
     async def dispatch(self, name, parameters):
+        if name == 'deny_entry':
+            if set(parameters) != {'reason'} or parameters['reason'] not in ('unrelated', 'unintelligible'):
+                raise ValueError('Provide a valid relevance refusal reason.')
+            if self.admitted or self.entry_decision is not None:
+                raise ValueError('This call already has an entry decision.')
+            self.entry_decision = {'status': 'denied', 'name': self.name,
+                                   'source': 'relevance_gate', 'reason': parameters['reason']}
+            self.door.close()
+            self.approvals.cancel(self)
+            return ({'can_enter': False, 'reason': parameters['reason']},
+                    'Entry denied — conversation is ' + parameters['reason'],
+                    {'basis': 'relevance_gate', 'approval': deepcopy(self.entry_decision)})
         if name == 'check_calendar_emails':
             query = parameters.get('query')
             if set(parameters) != {'query'} or not isinstance(query, str) or not 1 <= len(query.strip()) <= 500:
@@ -148,7 +160,7 @@ class Visitor:
             if state['floor'] == 0:
                 summary += ' · returns to 5 after 10 seconds on floor 0'
             return state, summary, {}
-        raise ValueError('Unknown tool. Available: open_door, send_elevator, check_calendar_emails.')
+        raise ValueError('Unknown tool. Available: open_door, send_elevator, check_calendar_emails, deny_entry.')
 
     def close(self):
         self.active = False

@@ -93,8 +93,11 @@ class ElevenAgent:
                 # model response while the backend finishes the call.
                 return
             decision = self.visitor.entry_decision or {}
-            if tool['tool_name'] == 'open_door' and decision.get('status') in ('denied', 'expired'):
+            if tool['tool_name'] in ('open_door', 'deny_entry') and decision.get('status') in ('denied', 'expired'):
                 self.refusing = True
+                self.managing_entry = True
+                if tool['tool_name'] == 'deny_entry':
+                    self.output.interrupt()
                 await self.announce('timeout' if decision['status'] == 'expired' else 'denied')
                 self.finished.set()
                 return  # Do not ask the model to generate a second farewell.
