@@ -89,7 +89,12 @@ function showStep(index, updateHash=true, scrollToBuild=false) {
   $('architecture-viewport').scrollLeft=0;
 }
 function advance() {
-  if(current===steps.length-1){window.location.assign('/');return;}
+  if(current===steps.length-1){
+    const demoUrl=new URL('/',window.location.href);
+    demoUrl.port='5173';
+    window.location.assign(demoUrl.href);
+    return;
+  }
   showStep(current+1,true,true);
 }
 function back(){showStep(current-1,true,true);}

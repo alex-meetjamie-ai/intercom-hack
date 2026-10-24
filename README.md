@@ -58,8 +58,11 @@ replaces the PCB, Raspberry Pi and UniFi with one Emulated module on the Mac.
 The deck has no navigation bar, chapter headings or caption strips; each agent
 tool is a separate connected module. Protocol labels remain on the connections.
 Arrow keys or Space advance; Left or Shift+Space go back. After Demo, Next/Space
-opens the intercom page without starting a call. Detailed wiring notes remain on
-How it works.
+opens the Three.js Demo world at http://localhost:5173 without starting a call.
+Start it in a second terminal with `npm --prefix client ci`,
+`npm --prefix threejs ci`, then `npm --prefix threejs run dev`.
+The 3D app uses the same backend on port 8740 for calls and employee approval.
+Detailed wiring notes remain on How it works.
 
 **How it works:** http://localhost:8740/how-it-works shows an animated connection
 diagram. Its default full-system view includes all eight photographed SKS terminals,
