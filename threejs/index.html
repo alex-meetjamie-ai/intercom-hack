@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f4f2eb" />
+    <meta name="description" content="A playful, interactive Three.js office. Take a little tour, one moment at a time." />
+    <title>Office Hours — Linienstraße 144 · Berlin</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="header">
+        <a class="brand" href="./" aria-label="Office Hours home">
+          <svg viewBox="0 0 32 36" aria-hidden="true"><path d="M3 12 16 4l13 8v19H3Z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M16 4v27M3 12l13 8 13-8M9 16v10m14-10v10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <span>office<span class="brand-light">hours</span><span class="brand-dot">®</span></span>
+        </a>
+        <div class="header-note"><span class="live-dot"></span>Linienstraße 144 · Berlin</div>
+        <button id="restart" class="text-button" type="button"><span aria-hidden="true">↺</span> Restart tour</button>
+      </header>
+
+      <main class="main">
+        <section class="intro" aria-label="Introduction">
+          <p class="eyebrow"><span></span> A LITTLE DELIVERY. A REAL BERLIN OFFICE.</p>
+          <h1><span id="hero-line">Pizza’s here.</span><br><em id="hero-emphasis">Almost.</em></h1>
+          <p id="intro-note" class="intro-copy">A little delivery, from the street to our rooftop.</p>
+          <div class="intro-line"></div>
+          <p class="tour-instruction">One delivery. Six little moments.<br><strong>Follow the pizza upstairs.</strong></p>
+          <div class="hand-note" aria-hidden="true">good things are on their way <span>↗</span></div>
+        </section>
+
+        <section id="viewport" class="viewport" aria-label="Interactive cartoon office">
+          <canvas id="office-canvas" role="img" aria-label="A cartoon recreation of Linienstraße 144: street entrance, courtyard, glass elevator, rooftop terrace and loft office."></canvas>
+          <div id="loading" class="loading" role="status"><span class="loading-dot"></span>Getting the pizza ready…</div>
+          <div id="render-error" class="render-error" hidden role="alert">
+            <strong>We couldn’t open the 3D view.</strong>
+            <p>Please try a browser with WebGL enabled, then reload this page.</p>
+          </div>
+          <div class="view-caption"><span class="caption-cross">+</span><span id="view-caption">AT THE STREET DOOR</span></div>
+          <p class="orbit-hint"><span aria-hidden="true">⤧</span> <span id="animation-status">A LITTLE MOMENT IN MOTION</span></p>
+          <div class="journey-location"><span class="live-dot"></span><span id="journey-position">STREET ENTRANCE</span></div>
+          <section id="notification-panel" class="notification-panel" aria-label="Egor’s phone" hidden>
+            <div class="notification-heading"><span class="phone-icon" aria-hidden="true">↗</span><span>EGOR’S PHONE<small>JUST NOW</small></span></div>
+            <h3>Someone’s at the door.</h3><p id="decision-message" aria-live="polite">Pizza delivery is at the street door.</p>
+            <div class="decision-buttons"><button id="deny" type="button">Not now</button><button id="allow" type="button">Let them in <span aria-hidden="true">↗</span></button></div>
+          </section>
+        </section>
+        <div class="edition" aria-hidden="true">LINIENSTRASSE 144 <span>—</span> BERLIN</div>
+      </main>
+
+      <footer class="tour-panel" aria-label="Guided office tour">
+        <div class="scene-progress-track" aria-hidden="true"><div id="scene-progress"></div></div>
+        <div class="chapter-index"><span id="step-number">01</span><span class="chapter-total">/ 06</span></div>
+        <div class="chapter-copy" aria-live="polite" aria-atomic="true">
+          <p id="step-category" class="eyebrow">01 / LINIENSTRASSE 144</p>
+          <h2 id="step-title">Good things come in pizza boxes.</h2>
+          <p id="step-description">Our courier rings the intercom at the street entrance. Someone upstairs gets the message.</p>
+        </div>
+        <nav id="step-dots" class="step-dots" aria-label="Tour stops"></nav>
+        <div class="tour-buttons">
+          <button id="back" class="back-button" type="button" aria-label="Previous stop" disabled>←</button>
+          <button id="next" class="next-button" type="button"><span id="next-label">Next</span><span aria-hidden="true">↗</span></button>
+        </div>
+      </footer>
+      <p id="api-feedback" class="toast" role="status" hidden></p>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
