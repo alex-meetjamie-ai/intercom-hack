@@ -352,7 +352,7 @@ function start(){
     }
     $('app').classList.toggle('raptor-attack',finale>4.4);
     const darkness=phase(finale,6.48,6.72);
-    ambience.update({street:[0,2,10].includes(current),voice:['connecting','connected','disconnecting'].includes(callStatus),muted:darkness>0});
+    ambience.update({street:current===0||current===10||(current===2&&cursor.progress>.4),office:current===1||current===5||(current===2&&cursor.progress<=.4)||(current===4&&cursor.progress>.75)||(current===6&&cursor.progress<.5),voice:['connecting','connected','disconnecting'].includes(callStatus),muted:darkness>0,finale:review?0:finale});
     blackout.style.opacity=String(darkness);
     $('app').classList.toggle('raptor-blackout',darkness>0);
     $('app').classList.toggle('raptor-ended',darkness>=.999);

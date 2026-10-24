@@ -45,10 +45,10 @@ export function sampleJourney(index, progress) {
   if (index >= 4) s.liftCalled=1;
   if (index >= 3) { s.approved = 1; s.streetDoor = 1; s.facade = index === 3 ? 1 - .94*phase(p, .04, .27) : .06; }
   if (index === 3) {
-    const walk = walkingRoute([STREET, [0, 0, 12.3], [0, 0, 8], [0, 0, LIFT_POSITION[2]], WAITING], phase(p, .1, .64));
+    const walk = walkingRoute([STREET, [0, 0, 12.3], [0, 0, 8], [0, 0, LIFT_POSITION[2]], WAITING], phase(p, .1, .96));
     s.visitor = walk.position; s.visitorYaw = turn(Math.PI, walk.yaw, phase(p,0,.1));
-    if(p>.60)s.visitorYaw=turn(s.visitorYaw,-Math.PI/2,phase(p,.60,.68));
-    s.walking = p > .1 && p < .64;
+    if(p>.92)s.visitorYaw=turn(s.visitorYaw,-Math.PI/2,phase(p,.92,1));
+    s.walking = p > .1 && p < .96;
     s.liftReach=0;
     s.liftPress=0;
     s.liftCalled=1;
@@ -56,13 +56,13 @@ export function sampleJourney(index, progress) {
     s.liftDoor=phase(p,.42,.50);
   }
   if (index === 4) {
-    const enter = walkingRoute([WAITING, CABIN], phase(p, .03, .2));
+    const enter = walkingRoute([WAITING, CABIN], phase(p, 0, .16));
     s.liftY = TOP * phase(p, .32, .82);
     s.leftWing=1-.94*phase(p,.28,.55);
     s.visitor = [enter.position[0], s.liftY, enter.position[2]];
     s.visitorYaw = -Math.PI/2;
-    s.walking = p > .03 && p < .2;
-    s.liftDoor = 1 - phase(p, .2, .3) + phase(p, .86, .98);
+    s.walking = p > 0 && p < .16;
+    s.liftDoor = 1 - phase(p, .16, .25) + phase(p, .86, .98);
   }
   if (index === 5) {
     s.leftWing=.06;
@@ -77,7 +77,9 @@ export function sampleJourney(index, progress) {
     s.liftDoor = 1; s.officeDoor = phase(p, .07, .25); s.greet = phase(p, .68, .9);
   }
   if(index>=6){
-    s.egor=[...HOST_LANDING];s.egorYaw=0;s.leftWing=.06;s.officeDoor=1;s.delivered=true;
+    s.egor=[...HOST_LANDING];s.egorYaw=0;s.officeDoor=1;s.delivered=true;
+    s.facade=index===6?.06+.94*phase(p,0,.18):1;
+    s.leftWing=index===6?.06+.94*phase(p,0,.18):1;
     if(index===6){
       const walk=walkingRoute([COURIER_LANDING,[COURIER_LANDING[0],TOP,CABIN[2]],[-11.1,TOP,CABIN[2]],[CABIN[0],TOP,CABIN[2]]],phase(p,.1,.8));
       s.visitor=walk.position;s.visitorYaw=walk.yaw;s.walking=p>.1&&p<.8;
@@ -99,10 +101,10 @@ export function sampleJourney(index, progress) {
     s.phone=0;
     s.notification=0;
     if(index===10){
-      const walk=walkingRoute([[-6,0,13.3],STREET],phase(p,.22,.70));
-      s.raptor=walk.position;s.raptorYaw=turn(walk.yaw,Math.PI,phase(p,.65,.76));s.raptorWalking=p>.22&&p<.70;
+      const walk=walkingRoute([[-6,0,13.3],STREET],phase(p,0,.68));
+      s.raptor=walk.position;s.raptorYaw=turn(walk.yaw,Math.PI,phase(p,.65,.76));s.raptorWalking=p<.68;
       s.raptorPress=phase(p,.76,.87);s.intercomPress=phase(p,.86,.90);s.ring=phase(p,.88,.92);
-      s.facade=phase(p,.12,.5);
+      s.facade=1;s.leftWing=1;
     }
   }
   return s;
@@ -158,8 +160,8 @@ export const stops = [
     nextLabel: 'Take it again',
   },
   {id:'return-to-lift',title:'Delivery complete. Heading back.',duration:3500},
-  {id:'return-down',title:'Back to the courtyard.',duration:1000},
-  {id:'return-to-street',title:'On to the next delivery.',duration:1200},
+  {id:'return-down',title:'Back to the courtyard.',duration:400},
+  {id:'return-to-street',title:'On to the next delivery.',duration:100},
   {id:'surprise-notification',title:'Wait… another visitor?',duration:1},
   {id:'raptor-arrival',title:'A very unexpected visitor.',duration:5000},
 ];
