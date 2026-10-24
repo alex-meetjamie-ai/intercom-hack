@@ -2,7 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createWorld } from './world.js';
-import { stops, sampleJourney, boundaries, atTime, phase } from './journey.js';
+import { stops, sampleJourney, boundaries, atTime, phase, STREET, turn } from './journey.js';
 import { journeyFrame, fitFrame, blendFrames, presentationFor } from './camera.js';
 import {createIntercomClient} from './intercom-client.js';
 import {createDemoStatus} from './demo-status.js';
@@ -39,7 +39,7 @@ function start(){
   const fill=new THREE.DirectionalLight(0xdeeee5,1.3);fill.position.set(20,25,-18);scene.add(fill);
   const world=createWorld();scene.add(world.group);
   const blackout=document.createElement('div');blackout.className='finale-blackout';blackout.setAttribute('aria-hidden','true');$('app').append(blackout);
-  const demoStatus=createDemoStatus({onStop:()=>stopDemo(),onDecision:choice=>chooseOnPhone(choice)});
+  const demoStatus=createDemoStatus({onStop:()=>primaryControl(),onDecision:choice=>chooseOnPhone(choice),onRaptor:()=>restartRaptorScene()});
   // One fixed ground plane keeps shadows spatially consistent during travel.
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(250,250),new THREE.ShadowMaterial({color:0x646d54,opacity:.11}));
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
@@ -47,6 +47,7 @@ function start(){
   let current=0,busy=false,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
   let toastTimer,denied=false,freeOrbit=false,playhead=stops[0].duration*.32,decisionAnimation=null;
   let callStatus='idle',interactionStarted=false;
+  let introStarted=false,introComplete=false,introStart=null;
   let backendState=null,activeApproval=null,accepted=false,pendingRequest=false;
   let playback=null,returnAt=null,raptorCallStarted=false,raptorCallVersion=0,raptorCallAt=0,raptorDenied=false,raptorBiteStart=null;
   let state=sampleJourney(0,.32),canonical=journeyFrame(0,.32,aspect);
@@ -69,7 +70,7 @@ function start(){
     $('app').dataset.scene=String(current);
     $('step-title').textContent=stop.title;
     restart.disabled=busy;
-    $('call-jamie').disabled=busy&&!client.active;
+    $('call-jamie').disabled=(!introComplete&&current===0)||(busy&&!client.active);
     $('call-lift').hidden=true;
     $('allow').hidden=$('deny').hidden=!(current===1&&!busy);
     $('allow').disabled=$('deny').disabled=busy;
@@ -107,13 +108,21 @@ function start(){
       await client.ring();
     }catch(error){showApiError(error);}
   }
+  function startIntro(){
+    if(introStarted||busy||client.active)return;
+    introStarted=true;introStart=performance.now();busy=true;
+    freeOrbit=false;controls.enabled=false;updateUI();
+  }
+  function primaryControl(){
+    if(current===0&&!introStarted&&!client.active)startIntro();else stopDemo();
+  }
   function pressIntercom(){
     if(current===10){
       if(client.active){raptorCallVersion++;client.disconnect().catch(showApiError);}
       else startRaptorCall();
       return;
     }
-    if(current!==0)return;
+    if(current!==0||!introComplete)return;
     if(client.active){
       interactionStarted=false;pendingRequest=false;playback=null;busy=false;freeOrbit=false;
       playhead=stops[0].duration*.32;controls.enabled=true;
@@ -150,13 +159,22 @@ function start(){
     decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
   function stopDemo(){
+    introStarted=false;introComplete=false;introStart=null;
     demoStatus.resetConversation();$('live-transcript').hidden=true;
     raptorCallVersion++;raptorCallStarted=false;raptorCallAt=0;raptorDenied=false;raptorBiteStart=null;
     interactionStarted=false;accepted=false;pendingRequest=false;denied=false;
     decisionAnimation=null;playback=null;returnAt=null;busy=false;current=0;
     playhead=stops[0].duration*.32;freeOrbit=false;controls.enabled=true;
     clearTimeout(toastTimer);$('api-feedback').hidden=true;
-    client.disconnect().catch(showApiError);updateUI();
+    const stopped=client.disconnect().catch(showApiError);updateUI();return stopped;
+  }
+  async function restartRaptorScene(){
+    const stopped=stopDemo();
+    const version=raptorCallVersion;
+    current=10;playhead=boundaries[10];busy=true;updateUI();
+    await stopped;
+    if(version!==raptorCallVersion)return;
+    busy=false;goTo(10,{replay:true});
   }
   restart.addEventListener('click',stopDemo);
   $('allow').addEventListener('click',()=>chooseOnPhone('yes'));
@@ -167,7 +185,7 @@ function start(){
     return new THREE.Vector2((event.clientX-rect.left)/rect.width*2-1,1-(event.clientY-rect.top)/rect.height*2);
   }
   function hitAction(event){
-    if(busy&&!(current===0&&client.active))return null;
+    if((current===0&&!introComplete)||(busy&&!(current===0&&client.active)))return null;
     const point=pointer(event);
     if(current===1)return world.pickPhoneChoice(point,camera);
     const hit=world.pickInteraction(point,camera);
@@ -228,6 +246,9 @@ function start(){
       playhead=playback.from+(playback.to-playback.from)*t;
       if(t===1){playback=null;busy=false;controls.enabled=true;updateUI();}
     }
+    if(!review&&introStart!==null&&!introComplete&&now-introStart>=3000){
+      introComplete=true;introStart=null;busy=false;controls.enabled=true;updateUI();
+    }
     if(decisionAnimation){
       const pending=decisionAnimation;
       if(!pending.sent&&now-pending.start>=440){
@@ -254,6 +275,14 @@ function start(){
     }
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor(),callStatus};
+    if(!review&&current===0&&!introComplete){
+      const p=introStart===null?0:Math.min(1,(now-introStart)/3000),walk=phase(p,0,.85);
+      state.visitor=[12+(STREET[0]-12)*walk,0,STREET[2]];
+      state.visitorYaw=turn(-Math.PI/2,Math.PI,phase(p,.75,1));
+      state.walking=introStarted&&p<.85;state.courierGone=!introStarted;
+    }
+    state.readyToStart=!review&&current===0&&!introStarted;
+
     if(!review&&cursor.index===10&&cursor.progress>=.86&&!raptorCallStarted)startRaptorCall();
     if(!review&&current===10){
       state.streetDoor=backendState?.door==='open'?1:0;

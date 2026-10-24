@@ -1,6 +1,6 @@
 import {stops} from './journey.js';
 
-export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
+export function createDemoStatus({onStop=()=>{},onDecision=()=>{},onRaptor=()=>{}}={}){
   const panel=document.createElement('aside');panel.className='demo-status';
   panel.innerHTML='<div class="admin-kicker">JAMIE · LIVE ADMIN</div><div class="demo-body"><div class="admin-state"><div><span>Door</span><strong data-door>Closed</strong></div><div><span>Elevator</span><strong data-lift>Floor 5</strong></div></div><section class="admin-activity"><span class="admin-label">LATEST ACTION</span><p data-action>Waiting for a call</p></section><section class="admin-conversation" hidden><span class="admin-label" data-speaker></span><p data-words></p></section><button type="button" class="demo-stop" aria-label="Stop demo and call"><span aria-hidden="true" data-control-icon>■</span><span data-control-label>Stop</span></button></div>';
   panel.setAttribute('aria-label','Presentation status');document.getElementById('app').append(panel);
@@ -10,18 +10,22 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
   phone.setAttribute('aria-label',"Egor's phone");
   phone.innerHTML='<div class="phone-speaker" aria-hidden="true"></div><div class="phone-owner">EGOR’S PHONE</div><div class="phone-notification"><span class="phone-app">JAMIE · INTERCOM</span><h2 data-visitor>Visitor at the door</h2><p data-visit-detail>Entry request</p><span data-approval-state hidden></span></div><div class="admin-decisions"><button type="button" data-decision="no">No</button><button type="button" data-decision="yes">Yes</button></div><div class="phone-home" aria-hidden="true"></div>';
   stack.append(phone);
-  let index=0,connection='idle',running=false,approval=null,lastRequest=null,transitioning=false,phoneScene=false,conversationStarted=false;
+  let index=0,connection='idle',running=false,approval=null,lastRequest=null,transitioning=false,phoneScene=false,conversationStarted=false,readyToStart=true;
   const stop=panel.querySelector('.demo-stop');
   stop.classList.add('emergency-stop');
   const links=document.createElement('nav');links.className='demo-shortcuts';links.setAttribute('aria-label','Demo controls and pages');
   links.append(stop);
+  const raptorShortcut=document.createElement('button');raptorShortcut.type='button';raptorShortcut.className='raptor-shortcut';
+  raptorShortcut.textContent='★';raptorShortcut.title='Restart raptor scene';raptorShortcut.setAttribute('aria-label','Restart raptor scene');
+  raptorShortcut.addEventListener('click',onRaptor);links.append(raptorShortcut);
+  const pages=document.createElement('nav');pages.className='demo-pages';pages.setAttribute('aria-label','Related pages');
   for(const [name,path] of [['Intercom','/'],['How it works','/how-it-works'],['Admin','/admin']]){
     const link=document.createElement('a');
     link.textContent=name+' ↗';link.href=new URL(path,import.meta.env.VITE_WEBSITE_URL).href;
     link.target='_blank';link.rel='noopener noreferrer';link.setAttribute('aria-label',name+' (opens in a new tab)');
-    links.append(link);
+    pages.append(link);
   }
-  document.getElementById('app').append(links);
+  document.getElementById('app').append(links,pages);
   stop.addEventListener('click',onStop);
   const decisions=[...phone.querySelectorAll('[data-decision]')];
   decisions.forEach(button=>button.addEventListener('click',()=>onDecision(button.dataset.decision)));
@@ -41,18 +45,18 @@ export function createDemoStatus({onStop=()=>{},onDecision=()=>{}}={}){
     phone.hidden=!showPhone;stack.classList.toggle('has-phone',showPhone);
     decisions.forEach(button=>{button.disabled=!approval||transitioning||(index!==1&&index!==10);});
     const active=running||['connecting','connected','disconnecting'].includes(connection);
-    const mode=active?'stop':'restart';
+    const mode=active?'stop':readyToStart?'start':'restart';
     if(stop.dataset.mode!==mode){
       stop.dataset.mode=mode;
-      stop.querySelector('[data-control-icon]').textContent=active?'■':'↻';
-      stop.querySelector('[data-control-label]').textContent=active?'Stop':'Restart';
-      stop.setAttribute('aria-label',active?'Stop demo and call':'Restart presentation');
+      stop.querySelector('[data-control-icon]').textContent=active?'■':readyToStart?'▶':'↻';
+      stop.querySelector('[data-control-label]').textContent=active?'Stop':readyToStart?'Start':'Restart';
+      stop.setAttribute('aria-label',active?'Stop demo and call':readyToStart?'Start presentation':'Restart presentation');
     }
     stop.disabled=false;
     panel.dataset.connection=connection;
   }
   function event(){ /* Errors are displayed by the main demo. */ }
-  function updateFrame(next,state,busy){index=next;phoneScene=Boolean(state.phoneNotice&&state.phone>.1);
+  function updateFrame(next,state,busy){readyToStart=Boolean(state.readyToStart);index=next;phoneScene=Boolean(state.phoneNotice&&state.phone>.1);
     if(state.phoneNotice){
       phone.querySelector('[data-visitor]').textContent='Another visitor?';
       phone.querySelector('[data-visit-detail]').textContent='Movement at the street door';
