@@ -48,10 +48,12 @@ async def main(update=False):
             open_tool = next(t for t in saved['prompt']['tools'] if t['name'] == 'open_door')
             if open_tool.get('response_timeout_secs') != 120 or not open_tool.get('expects_response'):
                 raise SystemExit('Employee approval wait settings were not saved correctly.')
+            if open_tool.get('pre_tool_speech') != 'off':
+                raise SystemExit('Automatic approval-tool speech must be off to avoid duplicate acknowledgements.')
             lookup = next(t for t in saved['prompt']['tools'] if t['name'] == 'check_calendar_emails')
             if lookup.get('pre_tool_speech') != 'off':
                 raise SystemExit('Silent lookup setting was not saved correctly.')
-            print('Updated the existing private Jamie agent; verified concise speech, silent lookup and approval wait settings.')
+            print('Updated the existing private Jamie agent; verified one acknowledgement, silent tools and approval wait settings.')
             return
     output.parent.mkdir(mode=0o700, exist_ok=True)
     fd = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

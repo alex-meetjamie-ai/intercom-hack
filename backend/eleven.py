@@ -17,14 +17,37 @@ class AgentError(RuntimeError):
 
 
 class ElevenAgent:
+    refusal_timeout = 12
+    audio_quiet_seconds = 1
+
     def __init__(self, visitor, output, transcript):
         self.visitor, self.output, self.transcript = visitor, output, transcript
         self.http = self.ws = self.task = None
         self.input_samples = 0
         self.ready = asyncio.Event()
         self.closed = asyncio.Event()
+        self.finished = asyncio.Event()
         self.error = None
         self.tool_tasks = set()
+        self.refusing = False
+        self.refusal_response = asyncio.Event()
+        self.refusal_audio_at = None
+        self.finish_task = None
+
+    async def finish_refusal(self):
+        # Wait for the short refusal to reach the caller, including queued PCM.
+        # A stalled/missing model response must not leave a rejected call open.
+        try:
+            async with asyncio.timeout(self.refusal_timeout):
+                await self.refusal_response.wait()
+                while (self.refusal_audio_at is None or self.output.buffer or
+                       asyncio.get_running_loop().time() - self.refusal_audio_at < self.audio_quiet_seconds):
+                    await asyncio.sleep(.05)
+                # Let the final RTP packets leave the sender and reach playout.
+                await asyncio.sleep(.2)
+        except TimeoutError:
+            pass
+        self.finished.set()
 
     async def run_tool(self, tool):
         try:
@@ -33,6 +56,11 @@ class ElevenAgent:
                 # Admission triggers SIP hangup. Do not prompt another spoken
                 # model response while the backend finishes the call.
                 return
+            decision = self.visitor.entry_decision or {}
+            if (tool['tool_name'] == 'open_door' and
+                    decision.get('status') in ('denied', 'expired') and not self.refusing):
+                self.refusing = True
+                self.finish_task = asyncio.create_task(self.finish_refusal())
             if not self.closed.is_set():
                 await self.ws.send_json({'type': 'client_tool_result', 'tool_call_id': tool['tool_call_id'], **result})
         except asyncio.CancelledError:
@@ -85,8 +113,11 @@ class ElevenAgent:
                     self.ready.set()
                 elif kind == 'audio':
                     self.output.push(base64.b64decode(data['audio_event']['audio_base_64'], validate=True))
+                    if self.refusing:
+                        self.refusal_audio_at = asyncio.get_running_loop().time()
                 elif kind == 'interruption':
-                    self.output.interrupt()
+                    if not self.refusing:
+                        self.output.interrupt()
                 elif kind == 'ping':
                     await self.ws.send_json({'type': 'pong', 'event_id': data['ping_event']['event_id']})
                 elif kind == 'user_transcript':
@@ -95,6 +126,8 @@ class ElevenAgent:
                     self.transcript('You', text)
                 elif kind == 'agent_response':
                     self.transcript('Jamie', data['agent_response_event']['agent_response'][:2000])
+                    if self.refusing:
+                        self.refusal_response.set()
                 elif kind == 'client_tool_call':
                     tool = data['client_tool_call']
                     task = asyncio.create_task(self.run_tool(tool))
@@ -116,6 +149,10 @@ class ElevenAgent:
             self.closed.set()
 
     async def send(self, pcm):
+        if self.refusing:
+            # The decision is final; do not let a new utterance interrupt the
+            # refusal or start another conversation turn during hangup.
+            return
         if not self.ws or self.ws.closed or self.closed.is_set():
             raise AgentError(self.error or 'ElevenLabs conversation ended')
         await asyncio.wait_for(self.ws.send_json({'user_audio_chunk': base64.b64encode(pcm).decode()}), 5)
@@ -123,6 +160,9 @@ class ElevenAgent:
 
     async def close(self):
         self.closed.set()
+        if self.finish_task:
+            self.finish_task.cancel()
+            await asyncio.gather(self.finish_task, return_exceptions=True)
         if self.task and self.task is not asyncio.current_task():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)

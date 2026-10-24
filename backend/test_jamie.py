@@ -40,6 +40,7 @@ class FakeAgent:
     def __init__(self, visitor, output, transcript):
         self.visitor, self.output, self.transcript = visitor, output, transcript
         self.ready, self.closed = asyncio.Event(), asyncio.Event()
+        self.finished = asyncio.Event()
         self.error, self.input_samples, self.nonzero_input = None, 0, 0
 
     async def start(self):
@@ -142,8 +143,8 @@ class SipClient:
         response = await self.response()
         assert response.first == 'SIP/2.0 200 OK', response.first
 
-    async def accept_hangup(self):
-        async with asyncio.timeout(2):
+    async def accept_hangup(self, timeout=2):
+        async with asyncio.timeout(timeout):
             request = await self.response()
         assert request.method == 'BYE', request.first
         await self.ws.send_str(request.response(200, 'OK'))

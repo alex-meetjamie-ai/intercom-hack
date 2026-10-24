@@ -7,11 +7,14 @@ including Alex.** Open **http://localhost:8740/admin** in a second tab and press
 **Allow** or **Deny** on the live notification. Matches are supporting evidence;
 an employee can also allow an unmatched visitor. Dates/times never block entry.
 
-Jamie says “Let me check quickly.” while waiting, without mentioning employee
+Jamie says “Let me check quickly.” once before the lookup/approval sequence, without mentioning employee
 approval. Allow opens the simulated door for five seconds, dispatches the elevator
 to 0 and immediately ends the SIP call, with no extra speech or farewell. The
 unlock timer continues after hangup. Deny, a 90-second timeout, or hanging up
-before approval keeps the door closed.
+before approval keeps the door closed. Deny and timeout play one short refusal,
+then the backend hangs up after the audio drains. A stalled refusal is capped at
+12 seconds, so it cannot leave the call open. Automatic pre-tool speech is off
+for both lookup and approval to avoid a second waiting announcement.
 The website shows the conversation, tool actions and simulated door/elevator.
 Try DHL delivery, pizza, Maya Weber’s interview, or Tom Schneider’s network visit.
 All example records are fictional.
@@ -215,8 +218,16 @@ A live denied visitor heard a short refusal and the door stayed closed. The fina
 silent-lookup setting was retested with DHL and the denied visitor; both used
 “Let me check quickly” once and did not mention employee approval.
 
-For all six real voice scenarios (Alex, four mock arrivals, unknown visitor),
-immediate hangup on admission and the production ten-second automatic return:
+Refusal/duplicate-speech regression (2026-10-24): 27 offline tests passed,
+including denied and expired requests playing audio before SIP BYE and a missing
+audio response still ending the call. Live tests passed for Alex allowed, an
+unknown visitor denied, an unnamed parcel courier denied, and approval expiry.
+Each used one waiting phrase. Denied/expired calls played a short refusal and
+ended with the door closed and elevator on 5. Forced pre-tool speech is now off
+on both tools; the prompt provides one acknowledgement for the whole sequence.
+
+For real voice scenarios (Alex, four mock arrivals, unknown visitor, unnamed
+parcel courier and approval timeout), including hangup and the elevator return:
 
 ```sh
 backend/.venv/bin/python backend/live_tools.py

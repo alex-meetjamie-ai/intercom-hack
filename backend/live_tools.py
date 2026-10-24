@@ -16,7 +16,9 @@ async def main(selected=()):
     report = json.loads(target.read_text()) if selected and target.exists() else []
     cases = [('Alex', 'My name is Alex. I work here and I am coming to the office.', None)] + [
         (r['id'], r['example'], r['id']) for r in RECORDS
-    ] + [('unknown', 'My name is Bob Smith from Acme Widgets. I am here to sell printer supplies to your office. I do not have an appointment.', None)]
+    ] + [('unknown', 'My name is Bob Smith from Acme Widgets. I am here to sell printer supplies to your office. I do not have an appointment.', None),
+         ('unnamed-parcel', "I don't have a name. I just brought the parcel. What the fuck?", None),
+         ('expired', 'My name is Alex. I work here and I am coming to the office.', None)]
     if selected:
         unknown = set(selected) - {case[0] for case in cases}
         if unknown:
@@ -25,6 +27,8 @@ async def main(selected=()):
     for name, words, record_id in cases:
         print('Calling Jamie with synthetic speech: ' + name, flush=True)
         async with server(ElevenAgent) as (jamie, url):
+            if name == 'expired':
+                jamie.approvals.timeout = 4
             client = SipClient(url, jamie.token)
             employee_http = aiohttp.ClientSession()
             employee_ws = await employee_http.ws_connect(url + '/employee?token=' + jamie.token, origin=url)
@@ -37,7 +41,7 @@ async def main(selected=()):
                 await until(lambda: client.nonzero > 4000)
                 await asyncio.sleep(5)
                 client.source.push(speech(text=words))
-                allowed = name != 'unknown'
+                allowed = name not in ('unknown', 'unnamed-parcel', 'expired')
                 # WebSocket heartbeats can restart aiohttp's per-message timeout.
                 # Bound the entire wait so an agent that never asks fails clearly.
                 async with asyncio.timeout(55):
@@ -51,8 +55,11 @@ async def main(selected=()):
                 spoken = ' '.join(m['text'].lower() for m in before_decision if m['speaker'] == 'Jamie')
                 assert spoken.count('let me check quickly') == 1, spoken
                 assert not re.search(r'\b(colleague|employee|approval|approve)\b', spoken), spoken
-                await employee_ws.send_json({'type': 'decision', 'id': request['id'],
-                                             'decision': 'allow' if allowed else 'deny'})
+                assert not re.search(r"\b(i'll check|i will check|understood)\b", spoken), spoken
+                audible_before = client.nonzero
+                if name != 'expired':
+                    await employee_ws.send_json({'type': 'decision', 'id': request['id'],
+                                                 'decision': 'allow' if allowed else 'deny'})
 
                 if allowed:
                     await client.accept_hangup()
@@ -70,8 +77,13 @@ async def main(selected=()):
                         await until(lambda: jamie.elevator.floor == 5, timeout=6)
                 else:
                     await until(lambda: any(a['tool'] == 'open_door' and not a['ok'] for a in jamie.actions), timeout=5)
-                    await until(lambda: any("can't let you in" in m['text'].lower()
+                    refusal = "couldn't confirm entry" if name == 'expired' else "can't let you in"
+                    await until(lambda: any(refusal in m['text'].lower()
                                            for m in list(jamie.messages)[len(before_decision):]), timeout=15)
+                    await client.accept_hangup(timeout=15)
+                    await until(lambda: jamie.call is None, timeout=2)
+                    assert jamie.error is None
+                    assert client.nonzero > audible_before + 4000, 'Refusal was not audible before BYE'
                     assert not any(a['tool'] == 'open_door' and a['ok'] for a in jamie.actions)
                     assert not jamie.door.open
                     assert jamie.elevator.floor == 5

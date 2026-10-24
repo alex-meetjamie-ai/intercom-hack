@@ -142,11 +142,16 @@ class Call:
         try:
             await asyncio.wait_for(self.acked.wait(), 10)
             signals = [asyncio.create_task(self.agent.closed.wait()),
-                       asyncio.create_task(self.visitor.admission.wait())]
+                       asyncio.create_task(self.visitor.admission.wait()),
+                       asyncio.create_task(self.agent.finished.wait())]
             done, _ = await asyncio.wait(signals, timeout=180, return_when=asyncio.FIRST_COMPLETED)
             if self.visitor.admission.is_set() and not self.closing:
                 # Dispatch locally before BYE: no extra model turn or farewell.
                 await self.visitor.tool('auto-elevator-' + self.id, 'send_elevator', {'floor': '0'})
+            elif self.agent.finished.is_set():
+                pass  # A refused/expired admission is a normal completed call.
+            elif done and not self.closing and getattr(self.agent, 'refusing', False) and not self.agent.error:
+                await self.agent.finished.wait()
             elif done and not self.closing:
                 self.app.error = self.agent.error or 'The conversation ended.'
         except asyncio.TimeoutError:
