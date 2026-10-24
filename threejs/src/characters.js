@@ -2,6 +2,17 @@ import * as THREE from 'three';
 import { group, box, ball, cylinder, label, material } from './geometry.js';
 import {PHONE_POSE,PHONE_CHOICES} from './layout.js';
 
+let dhlTexture;
+function dhlLogo(parent,width,position){
+  if(!dhlTexture){
+    dhlTexture=new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}branding/dhl.svg`);
+    dhlTexture.colorSpace=THREE.SRGBColorSpace;
+    dhlTexture.anisotropy=8;
+  }
+  const logo=new THREE.Mesh(new THREE.PlaneGeometry(width,width*65/284),new THREE.MeshBasicMaterial({map:dhlTexture,transparent:false,alphaTest:.5,depthWrite:true,side:THREE.FrontSide}));
+  logo.name='DHL logo';logo.position.fromArray(position);parent.add(logo);return logo;
+}
+
 export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal', courier = false, glasses = false }) {
   const root = group(parent, name, position);
   const body = group(root, 'Body');
@@ -100,16 +111,16 @@ export function createPerson(parent, { name, position = [0, 0, 0], shirt = 'teal
     const yellow='#ffcc00',red='#d40511';
     ball(body,.33,[0,2.2,0],yellow,[1,.42,1]);
     box(body,[.49,.045,.37],[0,2.19,.24],yellow,.045);
-    label(body,'DHL',.23,.075,[0,2.23,.306],{background:yellow,color:red,font:'900',size:.8});
+    dhlLogo(body,.24,[0,2.22,.328]);
     box(body,[.69,.08,.014],[0,1.46,.207],red,.004);
-    label(body,'DHL',.38,.14,[0,1.28,.211],{background:yellow,color:red,font:'900',size:.78});
-    const backLogo=label(body,'DHL',.52,.19,[0,1.29,-.211],{background:yellow,color:red,font:'900',size:.8});
+    dhlLogo(body,.35,[0,1.22,.204]);
+    const backLogo=dhlLogo(body,.45,[0,1.22,-.204]);
     backLogo.rotation.y=Math.PI;
     parcel=group(body,'DHL parcel',[-.08,1.22,.45]);
     box(parcel,[.86,.55,.44],[0,0,0],'#c99a64',.025);
     box(parcel,[.10,.006,.44],[0,.278,0],'#e5ca99',.002);
     box(parcel,[.10,.55,.006],[0,0,.224],'#e5ca99',.002);
-    const shipping=label(parcel,'DHL',.27,.17,[.22,.282,.015],{background:'#fff9ef',color:red,font:'900',size:.54});
+    const shipping=dhlLogo(parcel,.27,[.22,.285,.015]);
     shipping.rotation.x=-Math.PI/2;
     for(let i=0;i<9;i++)box(parcel,[.012+(i%3)*.003,.003,.075],[.12+i*.023,.284,-.065],'charcoal',0);
   }
