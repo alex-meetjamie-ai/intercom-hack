@@ -1,0 +1,296 @@
+{
+  "Config": {
+    "key": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "value": {
+      "tag": 2,
+      "type": "STRING"
+    }
+  },
+  "UpdateConfigs": {
+    "configs": {
+      "tag": 1,
+      "type": "Config",
+      "repeated": true
+    }
+  },
+  "ApiEndpoint": {
+    "key": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "value": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "method": {
+      "tag": 3,
+      "type": "STRING"
+    }
+  },
+  "Location": {
+    "id": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "name": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "type": {
+      "tag": 3,
+      "type": "STRING"
+    },
+    "parent": {
+      "tag": 4,
+      "type": "Location"
+    }
+  },
+  "DAUpdate": {
+    "revision": {
+      "tag": 2,
+      "type": "INT64"
+    },
+    "config": {
+      "tag": 3,
+      "type": "DAConfig"
+    },
+    "tokens": {
+      "tag": 4,
+      "type": "DAToken",
+      "repeated": true
+    },
+    "force": {
+      "tag": 5,
+      "type": "BOOL"
+    },
+    "config_too_big": {
+      "tag": 6,
+      "type": "BOOL"
+    },
+    "config_url": {
+      "tag": 7,
+      "type": "STRING"
+    },
+    "features": {
+      "tag": 8,
+      "type": "FaceFeature",
+      "repeated": true
+    }
+  },
+  "DAConfig": {
+    "facepp_api_key": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "facepp_api_secret": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "facepp_api_faceset_token": {
+      "tag": 3,
+      "type": "STRING"
+    },
+    "methods": {
+      "tag": 4,
+      "type": "STRING",
+      "repeated": true
+    },
+    "ibeacon_uuid": {
+      "tag": 5,
+      "type": "STRING"
+    },
+    "ibeacon_major": {
+      "tag": 6,
+      "type": "STRING"
+    },
+    "ibeacon_minor": {
+      "tag": 7,
+      "type": "STRING"
+    },
+    "uah_token": {
+      "tag": 8,
+      "type": "STRING"
+    },
+    "timestamp": {
+      "tag": 9,
+      "type": "INT64"
+    },
+    "door_entry_method": {
+      "tag": 10,
+      "type": "STRING"
+    },
+    "door_name": {
+      "tag": 11,
+      "type": "STRING"
+    },
+    "controller_host": {
+      "tag": 12,
+      "type": "STRING"
+    },
+    "controller_port": {
+      "tag": 13,
+      "type": "INT32"
+    },
+    "access_token": {
+      "tag": 14,
+      "type": "STRING"
+    },
+    "api_env": {
+      "tag": 15,
+      "type": "STRING"
+    },
+    "nfc_type": {
+      "tag": 16,
+      "type": "STRING"
+    },
+    "nfc_app_key": {
+      "tag": 17,
+      "type": "STRING"
+    },
+    "nfc_salt": {
+      "tag": 18,
+      "type": "STRING"
+    },
+    "voip_type": {
+      "tag": 19,
+      "type": "STRING"
+    },
+    "location": {
+      "tag": 20,
+      "type": "Location"
+    },
+    "bt_key": {
+      "tag": 21,
+      "type": "STRING"
+    },
+    "company_name": {
+      "tag": 22,
+      "type": "STRING"
+    },
+    "controller_type": {
+      "tag": 23,
+      "type": "STRING"
+    },
+    "api_env_url": {
+      "tag": 24,
+      "type": "STRING"
+    },
+    "api_endpoint": {
+      "tag": 25,
+      "type": "ApiEndpoint",
+      "repeated": true
+    },
+    "configs": {
+      "tag": 26,
+      "type": "Config",
+      "repeated": true
+    },
+    "AllowThirdPartyNfcCards": {
+      "tag": 27,
+      "type": "BOOL"
+    },
+    "ua_support_doorbell": {
+      "tag": 28,
+      "type": "BOOL"
+    },
+    "wallet_nfc_key": {
+      "tag": 29,
+      "type": "WalletNfcKey"
+    }
+  },
+  "DARemoteView": {
+    "agura_channel": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "app_id": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "user_id": {
+      "tag": 3,
+      "type": "STRING"
+    },
+    "user_name": {
+      "tag": 4,
+      "type": "STRING"
+    },
+    "device_id": {
+      "tag": 5,
+      "type": "STRING"
+    },
+    "action": {
+      "tag": 6,
+      "type": "STRING"
+    },
+    "video_token": {
+      "tag": 7,
+      "type": "STRING"
+    },
+    "agora_app_id": {
+      "tag": 8,
+      "type": "STRING"
+    },
+    "room_id": {
+      "tag": 9,
+      "type": "STRING"
+    },
+    "request_id": {
+      "tag": 10,
+      "type": "STRING"
+    },
+    "doorbell_channel": {
+      "tag": 11,
+      "type": "STRING"
+    },
+    "disable_pickup": {
+      "tag": 12,
+      "type": "BOOL"
+    }
+  },
+  "DACallAdminResult": {
+    "worker_id": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "worker_name": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "response": {
+      "tag": 3,
+      "type": "STRING"
+    }
+  },
+  "DACheckRemoteCallStateRequest": {
+    "request_id": {
+      "tag": 1,
+      "type": "STRING"
+    }
+  },
+  "DAToken": {
+    "type": {
+      "tag": 1,
+      "type": "STRING"
+    },
+    "value": {
+      "tag": 2,
+      "type": "STRING"
+    },
+    "worker_id": {
+      "tag": 3,
+      "type": "STRING"
+    },
+    "worker_name": {
+      "tag": 4,
+      "type": "STRING"
+    },
+    "granted": {
+      "tag": 5,
+      "type": "BOOL"
+    }
+  }
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ed"><title>Jamie — at the door</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="/" aria-label="Jamie home">j<span>·</span></a><span class="top-title">JAMIE / INTERCOM</span><nav class="page-nav" aria-label="Main"><a href="/" aria-current="page">Intercom</a><a href="/how-it-works">How it works</a></nav><span class="connection"><i id="connection-dot"></i><span id="connection-text">Connecting</span></span></header>
+  <main>
+    <section class="intro"><p class="eyebrow">A CONVERSATION AT THE DOOR</p><h1>Someone’s<br>here to help.</h1><p class="intro-copy">Ring Jamie, say hello, and let yourself in.</p></section>
+    <div class="workspace">
+      <section class="intercom" aria-label="Jamie intercom">
+        <div class="panel-top"><span class="panel-label">FRONT ENTRANCE</span><span class="panel-number">01</span></div>
+        <div class="speaker" aria-hidden="true"></div>
+        <div class="avatar" id="avatar" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M40 24v38c0 12-7 20-19 20"/><path d="M64 23v5"/></svg><div class="voice-rings"></div></div>
+        <p class="agent-state" id="agent-state">Ready when you are</p>
+        <button class="call-button" id="call-button"><span class="call-icon" id="call-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 3H3c0 10 8 18 18 18v-4l-5-2-2 2c-3-1-6-4-7-7l2-2-3-5Z"/></svg></span><span class="call-name" id="call-name">Jamie</span><span class="call-action" id="call-action">PRESS TO CALL</span></button>
+        <button id="play-audio" class="play-audio" hidden>Enable Jamie’s audio</button>
+        <div class="call-foot"><span class="live-dot"></span><span id="call-hint">Your microphone turns on when you call</span><span id="timer"></span></div>
+      </section>
+      <section class="side-panel">
+        <div class="door-card" id="door-card"><div class="door-illustration" aria-hidden="true"><div class="door-frame"><div class="door-leaf"><i></i></div></div><div class="door-shadow"></div></div><div><p class="eyebrow">ENTRANCE STATUS</p><h2 id="door-state" aria-live="polite">Door closed</h2><p id="door-description">Jamie will let you know when you can enter.</p></div><span class="door-badge" id="door-badge">CLOSED</span></div>
+        <div class="conversation"><div class="conversation-heading"><h2>Conversation</h2><span id="conversation-label">NOT STARTED</span></div><div id="transcript" class="transcript" role="log" aria-live="polite"><div class="empty-state"><span class="quote-mark">“</span><p>A simple hello<br>opens the conversation.</p><small>Your conversation will appear here.</small></div></div></div>
+        <div id="error" class="error" role="alert" hidden></div>
+      </section>
+    </div>
+    <footer><span><i class="prototype-dot"></i>LOCAL PROTOTYPE</span><p>Simulated door · No physical lock connected</p><span class="footer-note">MAKE YOURSELF HEARD.</span></footer>
+  </main>
+  <audio id="remote-audio" autoplay playsinline></audio>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
