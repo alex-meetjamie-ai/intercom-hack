@@ -1,6 +1,15 @@
 // An explanatory animation only: no microphone, network requests or door tools.
 const $ = id => document.getElementById(id);
 const ns = 'http://www.w3.org/2000/svg';
+function element(name, attrs = {}) {
+  const el = document.createElementNS(ns, name);
+  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
+  return el;
+}
+
+if ($('diagram-map')) initializeDiagramPage();
+
+function initializeDiagramPage() {
 const map = $('diagram-map'), svg = $('connections');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 let playing = !reducedMotion.matches, visitor = 'Alex', step = 0, elapsed = 0, lastTime, view = 'system';
@@ -14,12 +23,7 @@ const specs = {
   unlock: ['control', 'Check entry', 'name or arrival', false],
   status: ['state', 'Door status', 'HTTP · every 0.5 sec', false],
 };
-function element(name, attrs = {}) {
-  const el = document.createElementNS(ns, name);
-  for (const [key, value] of Object.entries(attrs)) el.setAttribute(key, value);
-  return el;
-}
-const fullSystem = buildFullSystem();
+const fullSystem = buildFullSystem({onCaption: caption => {if(view==='system')$('step-caption').textContent=caption;}});
 for (const [id, [type, label, detail, both]] of Object.entries(specs)) {
   const group = element('g', {class: `wire ${type}`});
   const path = element('path', {class: 'wire-base', 'marker-end': `url(#arrow-${type})`});
@@ -146,8 +150,10 @@ $('system-zoom').onchange=()=>{$('system-svg').classList.toggle('detail-zoom',$(
 new ResizeObserver(draw).observe(map);
 render();draw();document.fonts.ready.then(draw);requestAnimationFrame(frame);
 
-function buildFullSystem() {
-  const root=$('system-svg');
+}
+
+export function buildFullSystem({root=document.getElementById('system-svg'), inspector=document.getElementById('pin-inspector'), onCaption=()=>{}, presentation=false} = {}) {
+  const $ = id => root.querySelector(`#${id}`);
   // Photo order, not manufacturer pin numbers. Doorman terminal mapping is unknown.
   const pins=[
     ['a+','Red','#bd6655','Audio / control bus','Audio and control bus. The red wire stays on a+. A parallel tap is only proposed; no Doorman input terminal is verified.'],
@@ -163,10 +169,10 @@ function buildFullSystem() {
   const box=(x,y,w,h,cls='')=>`<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" class="system-card ${cls}"/>`;
   const chip=(x,y,w,value,planned=false)=>`<rect x="${x}" y="${y}" width="${w}" height="22" rx="5" class="sys-chip ${planned?'planned':''}"/>${text(x+9,y+15,value,'sys-chip-text'+(planned?' planned':''))}`;
   root.innerHTML=`
-    <title id="system-title">Jamie: SKS wall terminals, proposed Doorman adapter, network, Raspberry Pi, UniFi and voice agent</title>
-    <desc id="system-description">All eight SKS terminals continue to the indoor station. Only a+ and b− have a proposed parallel branch, with a visible gap because Doorman compatibility and pin mapping are unverified. Doorman would use Wi-Fi to the LAN and a Raspberry Pi would use Ethernet. The Pi would host the emulator and voice backend. Browser demo and ElevenLabs audio work on the Mac today; hardware and UniFi-to-agent integration remain planned.</desc>
-    ${text(30,36,'01 / THE BUILDING &amp; THE ADAPTER','sys-kicker')}
-    ${text(1670,36,'SOLID = EXISTING WIRING · DASHED = PLANNED', 'sys-small','text-anchor="end"')}
+    <title id="system-title">Jamie: SKS wall terminals, proposed ${presentation?'PCB':'Doorman adapter'}, network, Raspberry Pi, UniFi and voice agent</title>
+    <desc id="system-description">All eight SKS terminals continue to the indoor station. Only a+ and b− have a proposed parallel branch, with a visible gap because ${presentation?'PCB':'Doorman'} compatibility and pin mapping are unverified. The adapter would use Wi-Fi to the LAN and a Raspberry Pi would use Ethernet. The Pi would host the emulator and voice backend. ${presentation?'Jamie uses tools for records, employee approval, door release and the elevator.':'Browser demo and ElevenLabs audio work on the Mac today; hardware and UniFi-to-agent integration remain planned.'}</desc>
+    ${presentation?'':text(30,36,'01 / THE BUILDING &amp; THE ADAPTER','sys-kicker')}
+    ${presentation?'':text(1670,36,'SOLID = EXISTING WIRING · DASHED = PLANNED', 'sys-small','text-anchor="end"')}
     <g id="full-paths"></g>
     <g id="full-building">${box(30,70,225,270)}
       ${text(50,101,'EXISTING SKS SYSTEM','sys-kicker')}${text(50,136,'Entrance panel','sys-title')}
@@ -176,11 +182,14 @@ function buildFullSystem() {
       ${text(50,295,'Building controller → door release')}
       ${text(50,318,'Unlock returns over the same bus.','sys-small')}
     </g>
-    ${text(35,403,'OTHER EXISTING CIRCUITS','sys-kicker')}
+    ${presentation?`<g id="full-pin-photo">
+      <defs><clipPath id="sks-pins-photo-clip"><rect x="30" y="365" width="225" height="192" rx="14"/></clipPath></defs>
+      <image href="/presentation-assets/sks-pins.png" x="30" y="365" width="225" height="192" preserveAspectRatio="xMidYMid meet" clip-path="url(#sks-pins-photo-clip)" role="img" aria-label="Photo of the SKS wall connector and its eight wired terminals"/>
+    </g>`:`${text(35,403,'OTHER EXISTING CIRCUITS','sys-kicker')}
     ${text(35,434,'E− / E+ → floor bell')}${text(35,461,'+22 / GND → station power')}${text(35,488,'V+ / V− → video wiring')}
-    ${text(35,521,'No camera feed verified here.','sys-small')}
+    ${text(35,521,'No camera feed verified here.','sys-small')}`}
     ${box(310,70,220,470)}
-    ${text(332,102,'YOUR WALL CONNECTOR','sys-kicker')}${text(332,137,'SKS · 8 terminals','sys-title')}
+    ${text(332,102,'WALL CONNECTOR','sys-kicker')}${text(332,137,'SKS · 8 terminals','sys-title')}
     ${text(332,164,'Photo order: left → right','sys-small')}
     ${box(670,70,240,470)}
     ${text(690,102,'EXISTING INDOOR STATION','sys-kicker')}${text(690,137,'BSV2012','sys-title')}
@@ -189,74 +198,95 @@ function buildFullSystem() {
     ${text(332,567,'Measured: a+/b− 25.7 V DC','sys-small')}
     ${text(332,590,'+22/GND 28 V DC','sys-small')}
     ${text(332,613,'DC readings do not prove compatibility.','sys-small')}
+    <g data-reveal-step="2">
     ${text(675,565,'PROPOSED PARALLEL TAP','sys-kicker')}
-    ${text(675,640,'Other six terminals: no adapter tap.','sys-small')}
+    ${presentation?'':text(675,640,'Other six terminals: no adapter tap.','sys-small')}
     <g id="full-doorman">${box(1070,70,290,330,'planned')}
-      ${text(1090,102,'CANDIDATE ADAPTER','sys-kicker')}${text(1090,137,'Doorman S3','sys-title')}
-      ${chip(1090,151,184,'SKS SUPPORT UNVERIFIED',true)}
+      ${text(1090,102,'CANDIDATE ADAPTER','sys-kicker')}${presentation?`${text(1090,137,'Printed circuit board','sys-title')}${text(1090,167,'(PCB)','sys-title')}`:text(1090,137,'Doorman S3','sys-title')}
+      ${presentation?'':chip(1090,151,184,'SKS SUPPORT UNVERIFIED',true)}
       ${text(1090,204,'ESP32-S3 · Wi-Fi')}
       ${text(1090,231,'+ separate audio extension')}
       ${text(1090,258,'Candidate audio / FSK receive + send','sys-small')}
-      <rect x="1086" y="277" width="258" height="69" rx="7" class="sys-unverified"/>
+      ${presentation?'':`<rect x="1086" y="277" width="258" height="69" rx="7" class="sys-unverified"/>
       ${text(1100,298,'SKS INPUT / OUTPUT: TBD','sys-unverified-text')}
       ${text(1100,321,'Exact pads, levels &amp; firmware unknown','sys-small')}
-      ${text(1090,375,'No assumed SKS → A/B pin assignment','sys-small')}
+      ${text(1090,375,'No assumed SKS → A/B pin assignment','sys-small')}`}
     </g>
     <path d="M1018 279l-9 19m9 21-9 19M1043 279l-9 19m9 21-9 19" class="sys-gap"/>
-    ${text(1023,240,'GAP','sys-unverified-text','text-anchor="middle"')}
+    ${presentation?'':`${text(1023,240,'GAP','sys-unverified-text','text-anchor="middle"')}
     ${text(1012,437,'VERIFY BEFORE WIRING','sys-unverified-text')}
-    ${text(1012,459,'This branch is not a wiring instruction.','sys-small')}
-    ${box(1105,505,230,70,'planned')}
+    ${text(1012,459,'This branch is not a wiring instruction.','sys-small')}`}
+    ${presentation?'':`${box(1105,505,230,70,'planned')}
     ${text(1122,534,'Doorman: separate supply','sys-copy')}
-    ${text(1122,555,'Power method / isolation to verify','sys-small')}
-    <g id="full-lan">${box(1450,125,220,220)}
+    ${text(1122,555,'Power method / isolation to verify','sys-small')}`}
+    </g>
+    <g id="full-lan" data-reveal-step="3">${box(1450,125,220,220)}
       ${text(1470,157,'OFFICE NETWORK','sys-kicker')}${text(1470,192,'UniFi AP + LAN','sys-title')}
-      ${text(1470,224,'Doorman joins over Wi-Fi.')}
+      ${text(1470,224,presentation?'PCB joins over Wi-Fi.':'Doorman joins over Wi-Fi.')}
       ${text(1470,251,'Pi connects over Ethernet.')}
       ${text(1470,278,'Updates from your Mac → Pi')}
       ${text(1470,317,'Local audio/control transport: planned','sys-small')}
     </g>
-    ${text(30,680,'02 / SOFTWARE &amp; THE CONVERSATION','sys-kicker')}
-    <g id="full-browser">${box(30,775,250,225)}
+    ${presentation?'':text(30,680,'02 / SOFTWARE &amp; THE CONVERSATION','sys-kicker','data-reveal-step="3"')}
+    ${presentation?`<g id="full-tools" data-reveal-step="5">
+      <g id="full-tool-records">${box(30,750,250,94)}
+        ${text(50,789,'Emails &amp; calendar','sys-title sys-tool-title')}
+        ${text(50,819,'Mock records')}
+      </g>
+      <g id="full-tool-door">${box(30,867,250,94)}
+        ${text(50,906,'Open door','sys-title sys-tool-title')}
+        ${text(50,936,'Employee approval')}
+      </g>
+      <g id="full-tool-elevator">${box(30,984,250,94)}
+        ${text(50,1023,'Call elevator','sys-title sys-tool-title')}
+        ${text(50,1053,'Floor 0 → 5')}
+      </g>
+    </g>`:`<g id="full-browser" data-reveal-step="4">${box(30,775,250,225)}
       ${text(50,808,'TESTED ON THIS MAC','sys-kicker')}${text(50,843,'Browser intercom','sys-title')}
       <rect x="50" y="862" width="210" height="46" rx="7" fill="#df784f"/>
       ${text(68,891,'↗  Jamie','sys-title')}
       ${text(50,939,'SIP.js + microphone / speaker')}
       ${text(50,973,'Optional test entry point','sys-small')}
-    </g>
-    <g id="full-agent">${box(390,775,300,225)}
+    </g>`}
+    <g id="full-agent" data-reveal-step="4">${box(390,775,300,225)}
+      ${presentation?`${text(410,843,'Jamie','sys-title')}
+      ${text(410,889,'Voice agent')}
+      ${text(410,927,'Running in the cloud','sys-small')}`:`
       ${text(410,808,'ELEVENLABS CLOUD','sys-kicker')}${text(410,843,'Jamie, the agent','sys-title')}
       ${text(410,883,'“Hello! What is your name?”','sys-copy','id="full-agent-speech"')}
       ${text(410,920,'Speech → decision → spoken reply')}
-      ${text(410,947,'open_door → employee confirmation')}
-      ${text(410,977,'Internet required for this agent','sys-small')}
+      ${text(410,947,'open_door → employee confirmation','sys-copy','data-reveal-step="5"')}
+      ${text(410,977,'Internet required for this agent','sys-small')}`}
     </g>
-    <g id="full-pi">${box(850,735,510,300,'dark planned')}
+    <g id="full-pi" data-reveal-step="3">${box(850,735,510,300,'dark planned')}
       ${text(875,768,'RASPBERRY PI · PLANNED HOST','sys-kicker sys-muted-white')}
       ${text(875,804,'The local bridge','sys-title sys-white')}
       ${text(875,831,'Current software runs on the Mac. Pi migration is pending.','sys-small sys-muted-white')}
       <rect x="872" y="849" width="466" height="54" rx="6" class="sys-module"/>
       ${text(888,871,'SKS driver ↔ emulated UniFi reader + hub','sys-copy sys-white')}
       ${text(888,891,'Receive ring / audio · send answer / hangup / unlock','sys-small sys-muted-white')}
-      <rect x="872" y="914" width="466" height="54" rx="6" class="sys-module"/>
+      <g data-reveal-step="4"><rect x="872" y="914" width="466" height="54" rx="6" class="sys-module"/>
       ${text(888,936,'Voice backend · SIP / WebRTC ↔ PCM','sys-copy sys-white')}
       ${text(888,956,'Arrival lookup + door/lift tools · emulator integration pending','sys-small sys-muted-white')}
-      <circle cx="883" cy="995" r="5" id="full-door-dot" class="sys-indicator"/>
+      </g>
+      <g data-reveal-step="5"><circle cx="883" cy="995" r="5" id="full-door-dot" class="sys-indicator"/>
       ${text(897,999,'Demo: closed · real door position unknown','sys-copy sys-white','id="full-door-state"')}
+      </g>
       ${text(875,1023,'Ethernet for updates · own PSU · no direct SKS-to-GPIO wiring','sys-small sys-muted-white')}
     </g>
-    <g id="full-unifi">${box(1450,775,220,225)}
+    <g id="full-unifi" data-reveal-step="3">${box(1450,775,220,225)}
       ${text(1470,808,'OFFICE UDM','sys-kicker')}${text(1470,843,'UniFi Access','sys-title')}
       ${text(1470,881,'App calls &amp; unlock controls')}
       ${text(1470,911,'Separate emulator PoC tested','sys-small')}
-      ${text(1470,945,'Controller → agent SIP route:','sys-small')}
-      ${text(1470,968,'NOT CONNECTED YET','sys-unverified-text')}
+      <g data-reveal-step="4">${text(1470,945,'Controller → agent SIP route:','sys-small')}
+      ${text(1470,968,'NOT CONNECTED YET','sys-unverified-text')}</g>
     </g>
-    ${text(30,1110,'Door release is a bus command to the building controller. E+/E− are bell inputs, not lock contacts.','sys-small')}
-    ${text(1670,1110,'Schematic overview · not to scale','sys-small','text-anchor="end"')}
+    ${presentation?'':text(30,1110,'Door release is a bus command to the building controller. E+/E− are bell inputs, not lock contacts.','sys-small')}
+    ${presentation?'':text(1670,1110,'Schematic overview · not to scale','sys-small','text-anchor="end"')}
   `;
   const pinLayer=$('full-pins');
-  pins.forEach(([name,color,stroke,fn,description],i)=>{
+  pins.forEach(([name,color,stroke,fn,sourceDescription],i)=>{
+    const description=presentation?sourceDescription.replaceAll('Doorman','PCB'):sourceDescription;
     const y=206+i*40;
     const group=element('g',{class:'pin-row',role:'button',tabindex:'0','aria-label':`Terminal ${i+1}: ${name}, ${color}. ${description}`,'aria-pressed':'false','data-pin':String(i+1)});
     group.innerHTML=`<rect x="320" y="${y-22}" width="580" height="35" rx="5" class="pin-bg"/>
@@ -267,8 +297,8 @@ function buildFullSystem() {
       ${text(690,y,name,'pin-label')}${text(747,y,fn,'pin-function')}`;
     const select=()=>{
       pinLayer.querySelectorAll('.pin-row').forEach(el=>{el.classList.toggle('selected',el===group);el.setAttribute('aria-pressed',String(el===group));});
-      $('pin-inspector').querySelector('span').textContent=`${String(i+1).padStart(2,'0')} / ${name}`;
-      $('pin-inspector').querySelector('p').textContent=description;
+      inspector.querySelector('span').textContent=`${String(i+1).padStart(2,'0')} / ${name}`;
+      inspector.querySelector('p').textContent=description;
     };
     group.onclick=select;
     group.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();select();}};
@@ -290,31 +320,43 @@ function buildFullSystem() {
     pendingSip:['signal','M1450 929H1360',true],
     status:['state','M850 1005H810V1070H155V1000',false],
   };
+  if(presentation){
+    // Tools occupy the former browser block; no browser media wires remain.
+    for(const id of ['power','sip','media','status'])delete routes[id];
+    routes.toolRecords=['control','M390 920H335V797H280',false];
+    routes.toolDoor=['control','M390 920H335V914H280',false];
+    routes.toolElevator=['control','M390 920H335V1031H280',false];
+  }
+  // Optional presentation builds: the ordinary How it works page shows everything.
+  const revealSteps={building:1,buildingReturn:1,tapA:2,tapB:2,power:2,wifi:3,ethernet:3,native:3,sip:4,media:4,cloud:4,pendingSip:4,tool:5,toolRecords:5,toolDoor:5,toolElevator:5,status:5};
   const flowLayer=$('full-paths'), flows={};
   for(const [id,[type,d,planned]] of Object.entries(routes)){
-    const group=element('g',{class:'system-flow','data-flow':id});
+    const group=element('g',{class:'system-flow','data-flow':id,'data-reveal-step':revealSteps[id]});
     const path=element('path',{d,class:`system-path ${type} ${planned?'planned':''}`});
     const dots=[element('circle',{r:4,class:`system-packet ${type}`}),element('circle',{r:3,class:`system-packet ${type}`})];
     group.append(path,...dots);flowLayer.append(group);flows[id]={group,path,dots,lit:false};
   }
   // Deliberately disconnected stubs: there is no verified Doorman pin mapping.
   flowLayer.insertAdjacentHTML('beforeend',`
-    <path d="M1044 291H1070M1044 331H1070" class="system-path planned control"/>
+    <g data-reveal-step="2"><path d="M1044 291H1070M1044 331H1070" class="system-path planned control"/>
     <circle cx="565" cy="201" r="4" fill="#ba7f52"/><circle cx="600" cy="241" r="4" fill="#ba7f52"/>
-    ${text(1405,179,'Wi-Fi','sys-path-label','text-anchor="middle"')}
+    </g>
+    <g data-reveal-step="3">${text(1405,179,'Wi-Fi','sys-path-label','text-anchor="middle"')}
     ${text(1427,602,'Ethernet / RJ45','sys-path-label','text-anchor="middle"')}
     ${text(1305,688,'Audio + events ↔ commands','sys-path-label')}
     ${text(1305,709,'Local transport still to implement','sys-path-label warn')}
-    ${text(535,690,'SIP over WebSocket · call setup','sys-path-label','text-anchor="middle"')}
-    ${text(535,752,'WebRTC / SRTP · microphone ↔ speaker','sys-path-label','text-anchor="middle"')}
+    </g>
+    <g data-reveal-step="4">${presentation?'':`${text(535,690,'SIP over WebSocket · call setup','sys-path-label','text-anchor="middle"')}
+    ${text(535,752,'WebRTC / SRTP · microphone ↔ speaker','sys-path-label','text-anchor="middle"')}`}
     ${text(770,895,'PCM / WSS','sys-path-label','text-anchor="middle"')}
     ${text(770,912,'16 kHz audio','sys-path-label','text-anchor="middle"')}
-    ${text(770,958,'Tool call','sys-path-label','text-anchor="middle"')}
-    ${text(1405,827,'Emulator','sys-path-label','text-anchor="middle"')}
-    ${text(1405,914,'SIP: TBD','sys-path-label warn','text-anchor="middle"')}
-    ${text(480,1055,'Demo door status → browser · HTTP polling','sys-path-label','text-anchor="middle"')}
+    </g>
+    ${text(770,958,'Tool call','sys-path-label','text-anchor="middle" data-reveal-step="5"')}
+    ${text(1405,827,'Emulator','sys-path-label','text-anchor="middle" data-reveal-step="3"')}
+    ${text(1405,914,'SIP: TBD','sys-path-label warn','text-anchor="middle" data-reveal-step="4"')}
+    ${presentation?text(335,772,'Tool calls','sys-path-label','text-anchor="middle" data-reveal-step="5"'):text(480,1055,'Demo door status → browser · HTTP polling','sys-path-label','text-anchor="middle" data-reveal-step="5"')}
   `);
-  const stageFlows=[['building','buildingReturn','tapA','tapB','wifi','ethernet','native'],['cloud','ethernet','wifi','tapA','tapB','building','buildingReturn'],['building','buildingReturn','tapA','tapB','wifi','ethernet','cloud'],['tool'],['ethernet','wifi','tapA','tapB','building','buildingReturn','status'],['status']];
+  const stageFlows=[['building','buildingReturn','tapA','tapB','wifi','ethernet','native'],['cloud','ethernet','wifi','tapA','tapB','building','buildingReturn'],['building','buildingReturn','tapA','tapB','wifi','ethernet','cloud'],['tool','toolRecords','toolDoor','toolElevator'],['ethernet','wifi','tapA','tapB','building','buildingReturn','status'],['status']];
   let phase=0, isAlex=true;
   return {
     render(index,name){
@@ -327,8 +369,8 @@ function buildFullSystem() {
         isAlex?'Planned hardware path: backend → SKS driver → Doorman transmit → a+/b− → building door controller. Today only the simulated door opens; E+/E− are never used for unlocking.':'Bob is refused. No bus unlock command is sent. The website’s simulated door remains closed.',
         'The demo resets after five seconds. A physical unlock command would not tell us whether the door leaf is open or closed; that needs a separate door-position signal.',
       ];
-      if(view==='system')$('step-caption').textContent=captions[index];
-      $('full-agent-speech').textContent=index===2?`“My name is ${name}.”`:index===3?'“Waiting for a colleague.”':index>=4?(isAlex?'“Thanks, Alex.”':'“Sorry, Bob.”'):'“Hello! What is your name?”';
+      onCaption(captions[index]);
+      if(!presentation)$('full-agent-speech').textContent=index===2?`“My name is ${name}.”`:index===3?'“Waiting for a colleague.”':index>=4?(isAlex?'“Thanks, Alex.”':'“Sorry, Bob.”'):'“Hello! What is your name?”';
       const open=isAlex&&index===4;
       $('full-door-state').textContent=open?'Demo: open · physical unlock not connected':'Demo: closed · real door position unknown';
       $('full-door-dot').classList.toggle('open',open);
@@ -337,7 +379,7 @@ function buildFullSystem() {
     },
     animate(time){
       for(const [id,edge] of Object.entries(flows)){
-        if(!edge.lit)continue;
+        if(!edge.lit || edge.group.style.display==='none')continue;
         const length=edge.path.getTotalLength();
         edge.dots.forEach((dot,i)=>{
           let t=(time/2600+i*.5)%1;

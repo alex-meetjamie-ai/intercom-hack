@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f2ed"><title>Presentation — Jamie</title>
+  <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/diagram.css"><link rel="stylesheet" href="/presentation.css">
+</head>
+<body class="presentation-body">
+  <main class="presentation-stage" id="presentation" aria-label="Jamie presentation" aria-roledescription="carousel">
+    <section class="slide problem-slide is-active" id="problem" aria-roledescription="slide" aria-label="1 of 4 — The problem">
+      <div class="slide-copy">
+        <h1 class="reveal">The doorbell rings.<br><em>The office stops.</em></h1>
+        <p class="slide-lead reveal" style="--delay:80ms">An old intercom turns every visitor into an interruption for the team.</p>
+        <div class="problem-reasons reveal" style="--delay:160ms">
+          <div><span>01</span><p><strong>Old hardware.</strong><br>A shared system built for another era.</p></div>
+          <div><span>02</span><p><strong>We can’t just replace it.</strong><br>Changing the entrance needs WEG approval.</p></div>
+          <div><span>03</span><p><strong>Someone always has to get up.</strong><br>Leave the desk. Answer the intercom. Lose focus.</p></div>
+        </div>
+      </div>
+      <div class="sks-photo-story reveal" style="--delay:160ms" aria-label="Our existing SKS intercom, outside and inside">
+        <div class="sks-photo-pair">
+          <figure><img src="/presentation-assets/sks-outside.jpeg" alt="Our SKS entrance panel, with the Jamie doorbell"><figcaption>OUTSIDE</figcaption></figure>
+          <figure><img src="/presentation-assets/sks-inside-front.jpeg" alt="Our SKS BSV2012 indoor intercom mounted on the office wall"><figcaption>INSIDE</figcaption></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="slide solution-slide" id="solution" aria-roledescription="slide" aria-label="2 of 4 — The solution" hidden>
+      <div class="architecture-panel">
+        <div class="architecture-viewport" id="architecture-viewport">
+          <svg id="system-svg" viewBox="0 50 950 610" role="group" aria-labelledby="system-title system-description"></svg>
+          <svg id="demo-svg" viewBox="0 170 1560 500" role="img" aria-labelledby="demo-title demo-description" hidden>
+            <title id="demo-title">Demo: visitor, Emulated module, Jamie and three tools</title>
+            <desc id="demo-description">The Mac emulates the PCB, Raspberry Pi and UniFi. SIP and WebRTC connect the visitor to the backend; PCM over WSS carries two-way voice to the agent. Jamie calls three tools: check mock emails and calendar, request employee approval to open the simulated door, and call the simulated elevator.</desc>
+            <g class="demo-wires" aria-hidden="true">
+              <path class="demo-cable system-path audio" d="M280 330H480"/>
+              <path class="demo-cable system-path audio" d="M880 330H1120"/>
+              <path class="demo-cable system-path control" d="M1270 430V470H620V500M940 470V500M1270 470V500"/>
+              <circle cx="940" cy="470" r="4" fill="#c99553"/>
+              <circle cx="1270" cy="470" r="4" fill="#c99553"/>
+              <text x="380" y="300" class="sys-path-label" text-anchor="middle">SIP + WebRTC</text>
+              <text x="380" y="362" class="sys-path-label" text-anchor="middle">Two-way audio</text>
+              <text x="1000" y="300" class="sys-path-label" text-anchor="middle">PCM / WSS</text>
+              <text x="1000" y="362" class="sys-path-label" text-anchor="middle">Two-way voice</text>
+              <text x="970" y="454" class="sys-path-label" text-anchor="middle">Tool calls ↔ results</text>
+            </g>
+            <g id="demo-visitor"><rect x="50" y="250" width="230" height="160" rx="14" class="system-card"/>
+              <text x="76" y="319" class="sys-title">Visitor</text>
+              <text x="76" y="357" class="sys-copy">Demo world</text>
+            </g>
+            <g id="demo-emulator"><rect x="480" y="230" width="400" height="200" rx="14" class="system-card dark"/>
+              <text x="508" y="304" class="sys-title sys-white">Emulated module</text>
+              <text x="508" y="350" class="sys-copy sys-muted-white">PCB · Raspberry Pi · UniFi</text>
+              <text x="508" y="388" class="sys-small sys-muted-white">Running on this Mac</text>
+            </g>
+            <g id="demo-agent"><rect x="1120" y="230" width="300" height="200" rx="14" class="system-card"/>
+              <text x="1148" y="304" class="sys-title">Jamie</text>
+              <text x="1148" y="350" class="sys-copy">Voice agent</text>
+              <text x="1148" y="388" class="sys-small">Running in the cloud</text>
+            </g>
+            <g id="demo-tool-records"><rect x="480" y="500" width="280" height="120" rx="14" class="system-card"/>
+              <text x="505" y="551" class="sys-title sys-tool-title">Emails &amp; calendar</text>
+              <text x="505" y="587" class="sys-copy">Mock records</text>
+            </g>
+            <g id="demo-tool-door"><rect x="800" y="500" width="280" height="120" rx="14" class="system-card"/>
+              <text x="825" y="551" class="sys-title sys-tool-title">Open door</text>
+              <text x="825" y="587" class="sys-copy">Employee approval</text>
+            </g>
+            <g id="demo-tool-elevator"><rect x="1130" y="500" width="280" height="120" rx="14" class="system-card"/>
+              <text x="1155" y="551" class="sys-title sys-tool-title">Call elevator</text>
+              <text x="1155" y="587" class="sys-copy">Floor 0 → 5</text>
+            </g>
+          </svg>
+        </div>
+        <div class="sr-only" id="pin-inspector" aria-live="polite"><span>Pin explorer</span><p>Select a terminal to trace its cable.</p></div>
+      </div>
+    </section>
+  </main>
+  <div class="presentation-controls" role="group" aria-label="Slide controls">
+    <button class="fullscreen-button" id="fullscreen" aria-label="Enter fullscreen" title="Fullscreen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></svg></button>
+    <button class="slide-arrow" id="previous-slide" aria-label="Previous step" title="Previous · Left arrow" disabled>←</button>
+    <button class="slide-arrow next-arrow" id="next-slide" aria-label="Next step" title="Next · Right arrow or Space">→</button>
+  </div>
+  <div class="deck-progress" aria-hidden="true"><i id="deck-progress"></i></div>
+  <p id="slide-announcement" class="sr-only" aria-live="polite" aria-atomic="true"></p>
+  <script type="module" src="/presentation.js"></script>
+</body>
+</html>

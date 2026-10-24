@@ -93,6 +93,15 @@ def create_app(jamie):
     async def how_it_works(request):
         return web.FileResponse(WEBSITE / 'how-it-works.html')
 
+    async def presentation(request):
+        return web.FileResponse(WEBSITE / 'presentation.html')
+
+    async def presentation_style(request):
+        return web.FileResponse(WEBSITE / 'presentation.css')
+
+    async def presentation_script(request):
+        return web.FileResponse(WEBSITE / 'src/presentation.js')
+
     async def diagram_style(request):
         return web.FileResponse(WEBSITE / 'diagram.css')
 
@@ -198,6 +207,10 @@ def create_app(jamie):
     app.router.add_get('/app.js', script)
     app.router.add_get('/style.css', style)
     app.router.add_get('/how-it-works', how_it_works)
+    app.router.add_get('/presentation', presentation)
+    app.router.add_get('/presentation.css', presentation_style)
+    app.router.add_get('/presentation.js', presentation_script)
+    app.router.add_static('/presentation-assets/', WEBSITE / 'assets/presentation')
     app.router.add_get('/diagram.css', diagram_style)
     app.router.add_get('/diagram.js', diagram_script)
     app.router.add_get('/admin', admin_page)

@@ -49,6 +49,18 @@ another floor cancels it. The return timer continues after the call ends. Change
 between floors are instantaneous in this simulation. The call has already ended
 after admission, so subsequent spoken floor requests are no longer accepted.
 
+**Presentation:** http://localhost:8740/presentation uses large text and our SKS
+photos on the problem slide. One solution slide reuses the interactive SVG from
+How it works, with a photo of the wall terminals. It progressively adds the PCB
+and network, pans down to the Raspberry Pi, then reveals Jamie and agent tools.
+Overview then shows everything together. The final Demo slide
+replaces the PCB, Raspberry Pi and UniFi with one Emulated module on the Mac.
+The deck has no navigation bar, chapter headings or caption strips; each agent
+tool is a separate connected module. Protocol labels remain on the connections.
+Arrow keys or Space advance; Left or Shift+Space go back. After Demo, Next/Space
+opens the intercom page without starting a call. Detailed wiring notes remain on
+How it works.
+
 **How it works:** http://localhost:8740/how-it-works shows an animated connection
 diagram. Its default full-system view includes all eight photographed SKS terminals,
 the retained indoor station, a proposed Doorman branch, Wi-Fi/LAN, Raspberry Pi,
