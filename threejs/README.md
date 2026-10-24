@@ -49,19 +49,13 @@ A single playhead drives the camera, courier, doors, lift and Egor. The camera f
 
 For development-only still-frame review, open `/?reviewTo=3&reviewAction=0.5` for the courtyard walk or `/?reviewTo=4&reviewAction=0.52` for the lift ride. `/?reviewFrom=0&reviewTo=5&reviewAt=0.5` samples halfway through the shared timeline between those stops. These options are disabled in production builds. Add `&plan=1` to a review URL for a top-down layout check with the street at the top. Remove the query string for the normal tour.
 
-## Optional backend events
+## Shared backend client
 
-Everything runs locally by default. This prototype does not operate the real door or elevator and does not deliver an operating-system push notification.
+All backend communication lives in `../client`, imported as `@intercom/client`. Three.js only supplies scene callbacks and an audio element.
 
-To connect your backend, copy `.env.example` to `.env.local`, set `VITE_TOUR_EVENT_URL` to a complete endpoint URL, and restart Vite. Scene navigation sends:
+Run the existing backend on port 8740, then `npm run dev` in this folder. Vite proxies `/api` and `/sip`; `BACKEND_URL` overrides the local target. Press **Speak to Jamie** to start a real microphone/WebRTC conversation. Live transcript text appears over the scene, and the backend opening the door advances the journey. **End call** or **No** ends the SIP call. **Yes** only continues after the backend grants entry; the current backend has no manual Yes endpoint.
 
-```json
-{ "event": "tour_step_entered", "step": "courtyard" }
-```
-
-The step IDs are `doorbell`, `notification`, `access-granted`, `courtyard`, `elevator-ride` and `rooftop-greeting`. Egor's approval sends `access_request_approved` with step `access-granted`; declining sends `access_request_denied` with step `notification`.
-
-Any successful HTTP status is accepted; no response body is required. For a separately hosted backend, allow the frontend origin through CORS. Requests time out after five seconds; navigation cancels older pending requests. Failures show a message and allow the demo to continue. Initial page load sends no event. Vite environment values are public browser configuration. Adapt `src/api.js` to the real contract when available.
+The local backend needs its ElevenLabs agent configuration before voice can work. This integration does not change backend code, provision an agent, or expose its credentials. See `../client/README.md` for the client API. The door remains the backend's simulated door.
 
 The rear passage is structural geometry: side piers and an overhead brick section leave the aperture open through the block. Its floor continues to a small rear landing. The obsolete decorative doorway beside the lift has been removed.
 

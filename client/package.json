@@ -1,0 +1,8 @@
+{
+  "name": "@intercom/client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "dependencies": {"sip.js": "0.21.2"}
+}

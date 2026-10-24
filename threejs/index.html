@@ -16,6 +16,9 @@
         <div id="render-error" class="render-error" hidden role="alert">The 3D view could not start. Enable WebGL and reload.</div>
       </section>
       <div class="location-mark" aria-hidden="true"><span class="live-dot"></span>144 <span class="location-city">BERLIN</span></div>
+      <div class="voice-controls"><button id="voice" type="button">Speak to Jamie</button><button id="play-audio" type="button" hidden>Enable audio</button></div>
+      <audio id="remote-audio" autoplay playsinline></audio>
+      <p id="live-transcript" class="live-transcript" role="log" aria-live="polite" hidden></p>
       <button id="restart" class="restart icon-button" type="button" aria-label="Restart journey" title="Restart journey">↺</button>
       <section id="notification-panel" class="phone-accessibility" aria-label="Phone decision: select Yes or No on the phone screen" hidden>
         <div class="notification-heading"><span class="live-dot"></span>Doorbell <span class="notification-time">now</span></div>

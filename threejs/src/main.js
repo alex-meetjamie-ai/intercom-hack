@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createWorld } from './world.js';
 import { stops, sampleJourney, boundaries, atTime, phase } from './journey.js';
 import { journeyFrame, fitFrame, blendFrames, presentationFor } from './camera.js';
-import { sendTourEvent } from './api.js';
+import {createIntercomClient} from '@intercom/client';
 import {TERRACE,OFFICE_ORIGIN} from './layout.js';
 
 const $ = id => document.getElementById(id);
@@ -42,7 +42,8 @@ function start(){
   ground.rotation.x=-Math.PI/2;ground.receiveShadow=true;scene.add(ground);
 
   let current=0,busy=true,viewSize=30,aspect=1.5,elapsed=0,last=performance.now();
-  let controller,toastTimer,denied=false,freeOrbit=false,playhead=0,decisionAnimation=null;
+  let toastTimer,denied=false,freeOrbit=false,playhead=0,decisionAnimation=null;
+  let backendState=null,admitted=false,pendingAdmission=false;
   let playback={start:performance.now(),duration:reducedMotion.matches?0:stops[0].duration,from:0,to:boundaries[1],camera:null};
   let state=sampleJourney(0,0),canonical=journeyFrame(0,0,aspect);
   controls.addEventListener('start',()=>{if(!busy)freeOrbit=true;});
@@ -72,17 +73,26 @@ function start(){
     $('decision-message').textContent=denied?'Door closed. The courier is waiting.':'Pizza delivery';
     $('notification-panel').classList.toggle('declined',denied);
   }
-  function report(stop,event='tour_step_entered'){
-    controller?.abort();controller=new AbortController();const active=controller;
-    clearTimeout(toastTimer);$('api-feedback').hidden=true;
-    const timeout=setTimeout(()=>active.abort(new DOMException('Request timed out','TimeoutError')),5000);
-    sendTourEvent(stop.id,{event,signal:active.signal}).catch(error=>{
-      if(controller!==active)return;
-      console.warn('Could not send the demo event.',error);
-      $('api-feedback').textContent='The connection didn’t go through. You can keep exploring and try this stop again.';
-      $('api-feedback').hidden=false;toastTimer=setTimeout(()=>$('api-feedback').hidden=true,6500);
-    }).finally(()=>clearTimeout(timeout));
+  function showApiError(error){
+    clearTimeout(toastTimer);$('api-feedback').textContent=error.message||'Voice backend unavailable.';
+    $('api-feedback').hidden=false;toastTimer=setTimeout(()=>$('api-feedback').hidden=true,8000);
   }
+  const client=createIntercomClient({baseUrl:import.meta.env.VITE_API_BASE_URL||'',audio:$('remote-audio'),onError:showApiError,
+    onAudioBlocked:blocked=>{$('play-audio').hidden=!blocked;},
+    onState:state=>{
+      $('voice').textContent=state==='connecting'?'Connecting…':state==='connected'?'End call':'Speak to Jamie';
+      $('voice').disabled=state==='connecting';$('voice').dataset.active=String(state==='connected');
+    },onStatus:status=>{
+      if(status.door==='open'&&backendState?.door!=='open'){admitted=true;pendingAdmission=true;}
+      backendState=status;
+      const message=status.transcript?.at(-1);
+      $('live-transcript').textContent=message?`${message.speaker}: ${message.text}`:'';
+      $('live-transcript').hidden=!message;
+      $('voice').title=status.agent_configured?'Live microphone call':'Backend agent not configured';
+    },
+  });
+  $('voice').addEventListener('click',()=>client.active?client.disconnect().catch(showApiError):client.ring());
+  $('play-audio').addEventListener('click',client.playAudio);
   function goTo(index,{replay=false,decision=false}={}){
     if(busy||(index===current&&!replay))return;
     // Keep the same playhead and traverse every intermediate position, even
@@ -94,13 +104,13 @@ function start(){
     const from=(replay&&current===0)?0:playhead;
     playback={start:performance.now(),duration:reducedMotion.matches?0:Math.min(14000,Math.max(700,Math.abs(target-from))),from,to:target,camera:fromCamera};
     current=index;busy=true;denied=false;$('notification-panel').hidden=true;updateUI();
-    report(stops[index],decision?'access_request_approved':'tour_step_entered');
+
   }
 
   function chooseOnPhone(choice){
     if(busy||current!==1)return;
     freeOrbit=false;controls.enabled=false;busy=true;
-    decisionAnimation={choice,start:performance.now()};updateUI();
+    decisionAnimation={choice,start:performance.now(),sent:false,settled:false,error:null};updateUI();
   }
   next.addEventListener('click',()=>goTo((current+1)%stops.length));
   back.addEventListener('click',()=>goTo(Math.max(0,current-1)));
@@ -156,11 +166,20 @@ function start(){
       playhead=playback.from+(playback.to-playback.from)*t;
       if(t===1){playback=null;busy=false;controls.enabled=true;updateUI();}
     }
-    if(decisionAnimation&&now-decisionAnimation.start>=1100){
-      const choice=decisionAnimation.choice;decisionAnimation=null;busy=false;controls.enabled=true;
-      if(choice==='yes')goTo(2,{decision:true});
-      else{denied=true;updateUI();report(stops[current],'access_request_denied');}
+    if(decisionAnimation){
+      const pending=decisionAnimation;
+      if(!pending.sent&&now-pending.start>=440){
+        pending.sent=true;
+        client.decide(pending.choice==='yes').then(()=>{pending.settled=true;}).catch(error=>{pending.error=error;pending.settled=true;});
+      }
+      if(pending.settled&&now-pending.start>=1100){
+        decisionAnimation=null;busy=false;controls.enabled=true;
+        if(pending.error){showApiError(pending.error);updateUI();}
+        else if(pending.choice==='yes')goTo(2);
+        else{denied=true;admitted=false;pendingAdmission=false;updateUI();}
+      }
     }
+    if(pendingAdmission&&!busy&&current<=1){pendingAdmission=false;goTo(2);}
     const cursor=atTime(playhead);
     state={...cursor.state,presentation:presentationFor()};
     if(denied&&current===1)state.phoneChoice='no';
